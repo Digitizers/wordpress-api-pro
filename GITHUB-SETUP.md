@@ -79,7 +79,7 @@ clawhub install wordpress-api-skill
 1. וודא ש-`package.json` תקין ✅
 2. הרץ: `clawhub publish`
 3. הסקיל יופיע ב-ClawHub search
-4. משתמשים יוכלו להתקין עם: `clawhub install wordpress-api`
+4. משתמשים יוכלו להתקין עם: `clawhub install wordpress-api-skill`
 
 ---
 
