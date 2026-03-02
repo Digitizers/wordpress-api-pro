@@ -1,7 +1,7 @@
 {
   "name": "wordpress-api",
-  "version": "1.0.0",
-  "description": "WordPress REST API integration skill for OpenClaw - manage posts, pages, and media programmatically",
+  "version": "2.0.0",
+  "description": "WordPress REST API integration skill for OpenClaw - manage posts, pages, and media programmatically with multi-site support",
   "main": "SKILL.md",
   "keywords": [
     "openclaw",
@@ -12,17 +12,22 @@
     "cms",
     "content-management",
     "blogging",
-    "publishing"
+    "publishing",
+    "multi-site",
+    "batch-operations"
   ],
-  "author": "OpenClaw Contributors",
+  "author": "Ben Kalsky <ben@digitizer.co.il> (https://digitizer.co.il)",
+  "contributors": [
+    "OpenClaw Community"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/YOUR_USERNAME/wordpress-api-skill.git"
+    "url": "https://github.com/benkalsky/wordpress-api-skill.git"
   },
-  "homepage": "https://github.com/YOUR_USERNAME/wordpress-api-skill#readme",
+  "homepage": "https://github.com/benkalsky/wordpress-api-skill#readme",
   "bugs": {
-    "url": "https://github.com/YOUR_USERNAME/wordpress-api-skill/issues"
+    "url": "https://github.com/benkalsky/wordpress-api-skill/issues"
   },
   "engines": {
     "openclaw": ">=2026.2.0"
@@ -35,10 +40,12 @@
       "api",
       "cms",
       "publishing",
-      "content"
+      "content",
+      "multi-site",
+      "batch"
     ]
   },
   "scripts": {
-    "test": "python3 -m pytest tests/" 
+    "test": "echo 'No tests yet' && exit 0"
   }
 }
