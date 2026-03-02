@@ -16,14 +16,14 @@ WordPress REST API integration skill for OpenClaw. Manage posts, pages, media, a
 ### Via ClawHub (Recommended)
 
 ```bash
-clawhub install wordpress-api-skill
+clawhub install wordpress-api
 ```
 
 ### Manual Installation
 
 ```bash
 cd ~/.openclaw/workspace/skills/
-git clone https://github.com/Digitizers/wordpress-api-skill wordpress-api-skill
+git clone https://github.com/Digitizers/wordpress-api wordpress-api
 ```
 
 ## Quick Start
@@ -32,7 +32,7 @@ git clone https://github.com/Digitizers/wordpress-api-skill wordpress-api-skill
 
 **1. Copy config template:**
 ```bash
-cd ~/.openclaw/workspace/skills/wordpress-api-skill
+cd ~/.openclaw/workspace/skills/wordpress-api
 cp config/sites.example.json config/sites.json
 ```
 
@@ -96,7 +96,7 @@ export WP_APP_PASSWORD="xxxx xxxx xxxx xxxx xxxx xxxx"
 
 **Update a post:**
 ```bash
-python3 ~/.openclaw/workspace/skills/wordpress-api-skill/scripts/update_post.py \
+python3 ~/.openclaw/workspace/skills/wordpress-api/scripts/update_post.py \
   --post-id 123 \
   --title "New Title" \
   --content "Updated content" \

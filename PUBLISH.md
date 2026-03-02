@@ -30,8 +30,8 @@ clawhub whoami
 ```bash
 cd ~/.openclaw/workspace
 
-clawhub publish ./skills/wordpress-api-skill \
-  --slug wordpress-api-skill \
+clawhub publish ./skills/wordpress-api \
+  --slug wordpress-api \
   --name "WordPress API" \
   --version 2.0.0 \
   --changelog "Multi-site management system with batch operations, site groups, and dry-run mode. Full CRUD support for WordPress REST API with Gutenberg blocks."
@@ -48,8 +48,8 @@ Current version: **2.0.0** (first public release with multi-site)
 ## Step 3: Verify
 
 After publishing, check:
-- Skill page: https://clawhub.com/skills/wordpress-api-skill
-- Install test: `clawhub install wordpress-api-skill --dir /tmp/test-skills`
+- Skill page: https://clawhub.com/skills/wordpress-api
+- Install test: `clawhub install wordpress-api --dir /tmp/test-skills`
 
 ## Future Updates
 
@@ -62,8 +62,8 @@ When you update the skill:
 5. Publish new version:
 
 ```bash
-clawhub publish ./skills/wordpress-api-skill \
-  --slug wordpress-api-skill \
+clawhub publish ./skills/wordpress-api \
+  --slug wordpress-api \
   --name "WordPress API" \
   --version 2.1.0 \
   --changelog "Your changes here"
@@ -71,14 +71,14 @@ clawhub publish ./skills/wordpress-api-skill \
 
 Users can update with:
 ```bash
-clawhub update wordpress-api-skill
+clawhub update wordpress-api
 ```
 
 ## Unpublishing
 
 To remove (rarely needed):
 ```bash
-clawhub delete wordpress-api-skill
+clawhub delete wordpress-api
 ```
 
 Note: This soft-deletes. Contact ClawHub support for permanent removal.
