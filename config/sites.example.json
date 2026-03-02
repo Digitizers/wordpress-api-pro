@@ -1,0 +1,26 @@
+{
+  "sites": {
+    "digitizer-studio": {
+      "url": "https://www.digitizer.studio",
+      "username": "benkalsky",
+      "app_password": "",
+      "description": "Digitizer English site"
+    },
+    "digitizer-hebrew": {
+      "url": "https://www.digitizer.co.il",
+      "username": "benkalsky",
+      "app_password": "",
+      "description": "Digitizer Hebrew site"
+    },
+    "example-site": {
+      "url": "https://example.com",
+      "username": "admin",
+      "app_password": "",
+      "description": "Example WordPress site"
+    }
+  },
+  "groups": {
+    "digitizer": ["digitizer-studio", "digitizer-hebrew"],
+    "all": ["digitizer-studio", "digitizer-hebrew", "example-site"]
+  }
+}

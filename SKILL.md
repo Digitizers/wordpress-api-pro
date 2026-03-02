@@ -15,15 +15,37 @@ Interact with WordPress sites via the REST API. Create, update, and manage posts
 
 ## Quick Start
 
+### Single Site (Direct)
+
 ```bash
 # Update a post
-python3 ~/.openclaw/workspace/skills/wordpress-api/scripts/update_post.py \
+python3 scripts/update_post.py \
   --url "https://example.com" \
   --username "admin" \
   --app-password "xxxx xxxx xxxx xxxx" \
   --post-id 123 \
   --content "New content here" \
   --status "publish"
+```
+
+### Multi-Site (CLI Wrapper) ⭐
+
+```bash
+# Setup: Copy config template and add your sites
+cp config/sites.example.json config/sites.json
+# Edit config/sites.json with your sites
+
+# List configured sites
+./wp --list-sites
+
+# Update post on specific site
+./wp digitizer-studio update-post --id 123 --content "New content"
+
+# Run on all sites in a group
+./wp digitizer update-post --id 456 --status "publish"
+
+# Batch update across multiple sites
+python3 scripts/batch_update.py --group digitizer --post-ids 123,456 --status "publish"
 ```
 
 ## Authentication
@@ -57,7 +79,74 @@ export WP_USERNAME="admin"
 export WP_APP_PASSWORD="xxxx xxxx xxxx xxxx xxxx xxxx"
 ```
 
-## Scripts
+## Multi-Site Management
+
+### Configuration
+
+1. Copy the example config:
+```bash
+cp config/sites.example.json config/sites.json
+```
+
+2. Edit `config/sites.json` with your sites:
+```json
+{
+  "sites": {
+    "my-site": {
+      "url": "https://mysite.com",
+      "username": "admin",
+      "app_password": "xxxx xxxx xxxx",
+      "description": "My WordPress site"
+    }
+  },
+  "groups": {
+    "all": ["my-site"]
+  }
+}
+```
+
+### CLI Wrapper (`./wp`)
+
+```bash
+# List sites
+./wp --list-sites
+./wp --list-groups
+
+# Single site operations
+./wp my-site update-post --id 123 --content "..."
+./wp my-site create-post --title "..." --content "..."
+./wp my-site get-post --id 123
+./wp my-site list-posts --per-page 10
+
+# Group operations (runs on all sites in group)
+./wp all update-post --id 123 --status "publish"
+```
+
+### Batch Operations
+
+```bash
+# Update multiple posts across multiple sites
+python3 scripts/batch_update.py \
+  --group digitizer \
+  --post-ids 123,456,789 \
+  --status "publish"
+
+# Update meta field on all sites
+python3 scripts/batch_update.py \
+  --sites all \
+  --post-ids 100 \
+  --meta-key "seo_score" \
+  --meta-value "95"
+
+# Dry run (see what would happen)
+python3 scripts/batch_update.py \
+  --group all \
+  --post-ids 123 \
+  --status "draft" \
+  --dry-run
+```
+
+## Individual Scripts
 
 All scripts support both command-line arguments and environment variables.
 

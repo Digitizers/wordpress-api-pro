@@ -27,6 +27,7 @@ Thumbs.db
 .env.local
 credentials/
 secrets/
+config/sites.json
 
 # Build
 dist/

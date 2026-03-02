@@ -28,6 +28,54 @@ git clone https://github.com/YOUR_USERNAME/wordpress-api-skill wordpress-api
 
 ## Quick Start
 
+### Option A: Multi-Site Setup (Recommended for 2+ sites) ⭐
+
+**1. Copy config template:**
+```bash
+cd ~/.openclaw/workspace/skills/wordpress-api
+cp config/sites.example.json config/sites.json
+```
+
+**2. Edit config/sites.json:**
+```json
+{
+  "sites": {
+    "site1": {
+      "url": "https://site1.com",
+      "username": "admin",
+      "app_password": "xxxx xxxx xxxx",
+      "description": "First site"
+    },
+    "site2": {
+      "url": "https://site2.com",
+      "username": "admin",
+      "app_password": "yyyy yyyy yyyy",
+      "description": "Second site"
+    }
+  },
+  "groups": {
+    "all": ["site1", "site2"]
+  }
+}
+```
+
+**3. Use the CLI wrapper:**
+```bash
+# List sites
+./wp --list-sites
+
+# Update post on specific site
+./wp site1 update-post --id 123 --content "New content"
+
+# Update on all sites
+./wp all update-post --id 456 --status "publish"
+
+# Batch update
+python3 scripts/batch_update.py --group all --post-ids 123,456 --status "publish"
+```
+
+### Option B: Single Site Setup
+
 ### 1. Create Application Password
 
 1. Go to: `https://yoursite.com/wp-admin/profile.php`
