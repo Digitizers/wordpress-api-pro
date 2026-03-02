@@ -129,6 +129,48 @@ python3 scripts/get_post.py --post-id 1
 
 ---
 
+---
+
+## 🚀 פרסום ב-ClawHub
+
+לאחר העלאה לגיטהאב, פרסם ב-ClawHub:
+
+### שלב 1: התחבר
+
+```bash
+clawhub login
+# → פותח דפדפן, תתחבר עם GitHub/Google
+```
+
+### שלב 2: פרסם
+
+**אוטומטי (מומלץ):**
+```bash
+./QUICK-PUBLISH.sh
+```
+
+**ידני:**
+```bash
+clawhub publish ./skills/wordpress-api \
+  --slug wordpress-api \
+  --name "WordPress API" \
+  --version 2.0.0 \
+  --changelog "Multi-site management + batch operations"
+```
+
+### שלב 3: אישור
+
+✓ Skill מפורסם ב-https://clawhub.com/skills/wordpress-api
+
+אנשים יכולים להתקין:
+```bash
+clawhub install wordpress-api
+```
+
+---
+
 **הכל מוכן! 🎉**
 
-פשוט תריץ את הפקודות למעלה והrepository יעלה לגיטהאב + ClawHub.
+1. העלה לגיטהאב
+2. פרסם ב-ClawHub
+3. השתמש בעצמך או שתף עם הקהילה!
