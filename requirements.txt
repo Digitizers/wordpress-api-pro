@@ -1,7 +1,0 @@
-# Python dependencies for wordpress-api skill
-
-# HTTP library for API requests (used by new plugin scripts)
-requests>=2.31.0
-
-# Note: Core scripts (update_post.py, create_post.py, etc.) use urllib.request (built-in)
-# Only the new plugin integration scripts require requests library
