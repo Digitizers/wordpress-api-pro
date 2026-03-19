@@ -17,7 +17,7 @@ WordPress REST API integration skill for OpenClaw. Manage posts, pages, media, a
 ### Via ClawHub (Recommended)
 
 ```bash
-clawhub install wordpress-api
+clawhub install wordpress-api-skill
 ```
 
 ### Manual Installation
