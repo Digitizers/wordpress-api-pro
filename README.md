@@ -1,9 +1,12 @@
-# WordPress API - OpenClaw Skill
+# WordPress API Pro - OpenClaw Skill
 
 WordPress REST API integration skill for OpenClaw. Manage posts, pages, media, and more programmatically.
 
 ## Features
 
+- ✅ **Elementor Content** - Read and update Elementor page content via _elementor_data meta field
+- ✅ **Media Upload** - Upload images to WordPress media library
+- ✅ **WooCommerce Products** - Manage WooCommerce products
 - ✅ **Full CRUD** - Create, read, update, delete posts/pages
 - ✅ **Gutenberg Support** - Native block format
 - ✅ **Secure Auth** - Application Passwords (recommended)
@@ -132,13 +135,16 @@ python3 scripts/list_posts.py --per-page 10 --status "publish"
 | `get_post.py` | Retrieve single post |
 | `list_posts.py` | List/filter posts |
 
-### Plugin Integration (New in v3.1.0)
+### Plugin Integration (New in v3.2.0)
 | Script | Purpose |
 |--------|---------|
 | `detect_plugins.py` | Auto-detect installed plugins (ACF, Rank Math, Yoast, JetEngine) |
 | `acf_fields.py` | Read/write Advanced Custom Fields |
 | `seo_meta.py` | Read/write Rank Math & Yoast SEO meta |
 | `jetengine_fields.py` | Read/write JetEngine custom fields |
+| `elementor_content.py` | Read/update Elementor page content |
+| `upload_media.py` | Upload images to WordPress media library |
+| `woo_products.py` | Manage WooCommerce products |
 
 **Examples:**
 ```bash
@@ -153,6 +159,20 @@ python3 scripts/seo_meta.py --post-id 123 --set '{"title": "SEO Title", "descrip
 
 # Update JetEngine field
 python3 scripts/jetengine_fields.py --post-id 123 --field my_field --value "value"
+
+# Elementor Content
+python3 scripts/elementor_content.py get --post-id 123 --widget-id some_widget_id
+python3 scripts/elementor_content.py update --post-id 123 --widget-id some_widget_id --field 'title' --value 'New Title'
+
+# Media Upload
+python3 scripts/upload_media.py --file-path /path/to/image.jpg --title "My Image" --caption "A beautiful image"
+python3 scripts/upload_media.py --url https://example.com/image.png --set-featured --post-id 123
+
+# WooCommerce Products
+python3 scripts/woo_products.py list --status 'publish'
+python3 scripts/woo_products.py get --id 456
+python3 scripts/woo_products.py create --name "New Product" --type 'simple' --regular-price '29.99'
+python3 scripts/woo_products.py update --id 456 --description "Updated product description"
 ```
 
 ## Documentation
