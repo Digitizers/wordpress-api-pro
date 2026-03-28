@@ -27,7 +27,7 @@ clawhub install wordpress-api-pro
 
 ```bash
 cd ~/.openclaw/workspace/skills/
-git clone https://github.com/Digitizers/wordpress-api-pro wordpress-api
+git clone https://github.com/Digitizers/wordpress-api-pro wordpress-api-pro
 ```
 
 ## Quick Start
