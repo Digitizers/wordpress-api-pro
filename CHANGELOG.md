@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.5.0 - 2026-06-01
+
+Claude Code support.
+
+- Added `INSTALL.sh` to install the skill into `~/.claude/skills/wordpress-api-pro/` for [Claude Code](https://claude.ai/download), alongside the existing OpenClaw path.
+- Added `wordpress-api-pro/requirements.txt` (`requests`) — needed only by the ACF / SEO / JetEngine / plugin-detection scripts; the core scripts remain stdlib-only.
+- Documented the Claude Code workflow in `README.md` and `SKILL.md`, including local-dev sites and pairing with the Elementor MCP kit.
+- Packaging: shipped `INSTALL.sh` + `requirements.txt`, bumped version to `3.5.0`.
+
 ## 3.4.0 - 2026-05-05
 
 Security and packaging cleanup for ClawHub publication.

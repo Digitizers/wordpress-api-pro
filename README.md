@@ -33,7 +33,7 @@ ClawHub package directory: `wordpress-api-pro/`.
 
 ## Version
 
-Current version: **3.4.0**
+Current version: **3.5.0**
 
 ## Installation
 
@@ -48,6 +48,20 @@ openclaw skills install wordpress-api-pro
 ```bash
 cp -R wordpress-api-pro ~/.openclaw/workspace/skills/wordpress-api-pro
 ```
+
+### Via Claude Code
+
+The skill also runs in [Claude Code](https://claude.ai/download). The installer copies the payload into `~/.claude/skills/` so Claude Code discovers it automatically:
+
+```bash
+git clone https://github.com/Digitizers/wordpress-api-pro.git
+cd wordpress-api-pro
+bash INSTALL.sh
+```
+
+Then restart Claude Code, export `WP_URL` / `WP_USERNAME` / `WP_APP_PASSWORD` (or set up `config/sites.json`), and ask Claude to use it. The ACF / SEO / JetEngine / plugin-detection scripts need `requests` (`pip install -r requirements.txt`); the core post/page/media/WooCommerce/batch scripts use the Python stdlib only.
+
+> Pairs well with the [Elementor MCP kit](https://github.com/Digitizers/claude-elementor-pro): build pages with the MCP, then handle media uploads, SEO meta, custom fields, and WooCommerce with these scripts.
 
 ## Quick Start
 
