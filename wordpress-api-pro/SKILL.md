@@ -1,6 +1,6 @@
 ---
 name: wordpress-api-pro
-version: 3.5.0
+version: 3.5.1
 license: MIT-0
 description: |
   WordPress REST API integration for managing posts, pages, media, WooCommerce products, Elementor content, SEO meta, ACF, and JetEngine fields.
@@ -18,7 +18,7 @@ Manage WordPress sites through the REST API. Runs as an OpenClaw skill or in Cla
 This skill runs the `scripts/*.py` directly. From the skill directory (`~/.claude/skills/wordpress-api-pro/` after `bash INSTALL.sh`):
 
 - **Auth:** export `WP_URL` / `WP_USERNAME` / `WP_APP_PASSWORD`, or use `config/sites.json` for multi-site.
-- **Dependencies:** the ACF / SEO / JetEngine / plugin-detection scripts need `requests` (`python3 -m pip install -r requirements.txt`, ideally in a venv). The core post/page/media/WooCommerce/batch scripts use the stdlib only.
+- **Dependencies:** the ACF / SEO / JetEngine / plugin-detection scripts need `requests` (`python3 -m pip install requests`, ideally in a venv). The core post/page/media/WooCommerce/batch scripts use the stdlib only.
 - **Local dev sites** (e.g. `http://site.local`) work — the private/HTTP restriction applies only to `--allow-remote-url` media downloads, not the WP API base URL.
 - **Pairs with the Elementor MCP kit** (`claude-elementor-pro`): build page structure with the MCP, then do media uploads, SEO meta, custom fields, and WooCommerce here.
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.5.1 - 2026-06-01
+
+ClawHub packaging compatibility.
+
+- Removed `wordpress-api-pro/requirements.txt` from the published skill payload — the ClawHub package directory ships only `.json` / `.md` / `.py` / `.sh` files, so the single `.txt` is dropped to keep publishing clean.
+- The `requests` dependency (ACF / SEO / JetEngine / plugin-detection scripts only) is now installed directly: `pip install requests`. `INSTALL.sh`, README, and SKILL.md updated accordingly. Core scripts remain stdlib-only.
+
 ## 3.5.0 - 2026-06-01
 
 Claude Code support.

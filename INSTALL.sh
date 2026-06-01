@@ -51,8 +51,8 @@ if [ -d "$DEST" ]; then
 fi
 
 mkdir -p "$DEST"
-# Copy the payload contents (SKILL.md, scripts/, references/, config/, wp.sh,
-# requirements.txt) to the skill root so relative `scripts/*.py` paths resolve.
+# Copy the payload contents (SKILL.md, scripts/, references/, config/, wp.sh)
+# to the skill root so relative `scripts/*.py` paths resolve.
 cp -R "$SRC"/. "$DEST"/
 chmod +x "$DEST/wp.sh" 2>/dev/null || true
 ok "Installed skill payload"
@@ -63,8 +63,8 @@ if python3 -c "import requests" >/dev/null 2>&1; then
   ok "'requests' already available"
 else
   warn "'requests' not installed. Install it when you need the plugin scripts:"
-  printf "      ${CYAN}python3 -m pip install -r \"$DEST/requirements.txt\"${RESET}\n"
-  printf "    ${DIM}(or use a venv: python3 -m venv .venv && .venv/bin/pip install -r requirements.txt)${RESET}\n"
+  printf "      ${CYAN}python3 -m pip install requests${RESET}\n"
+  printf "    ${DIM}(or use a venv: python3 -m venv .venv && .venv/bin/pip install requests)${RESET}\n"
 fi
 
 cat <<EOF
