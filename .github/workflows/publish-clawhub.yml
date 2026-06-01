@@ -73,9 +73,12 @@ jobs:
         env:
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
         run: |
-          ARGS=("$SKILL_DIR" --version "${{ steps.ver.outputs.version }}")
+          # `clawhub skill publish` has no --dry-run flag, so we emulate a preview
+          # by printing the exact command (auth + version already validated above)
+          # and exiting without uploading.
           if [ "$DRY_RUN" = "true" ]; then
-            echo "Dry run — no upload."
-            ARGS+=(--dry-run)
+            echo "Dry run — would publish:"
+            echo "  clawhub skill publish $SKILL_DIR --version ${{ steps.ver.outputs.version }}"
+            exit 0
           fi
-          clawhub skill publish "${ARGS[@]}"
+          clawhub skill publish "$SKILL_DIR" --version "${{ steps.ver.outputs.version }}"
