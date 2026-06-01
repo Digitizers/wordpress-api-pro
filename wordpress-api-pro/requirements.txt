@@ -1,5 +1,0 @@
-# Runtime dependency for the plugin-integration scripts only
-# (acf_fields.py, detect_plugins.py, jetengine_fields.py, seo_meta.py).
-# The core post/page/media/WooCommerce/batch scripts use the Python stdlib
-# and need nothing here.
-requests>=2.25.0
