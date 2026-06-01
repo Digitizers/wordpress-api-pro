@@ -1,0 +1,81 @@
+name: Publish to ClawHub
+
+# Publishes the skill payload (wordpress-api-pro/) to ClawHub.
+#
+# Triggers:
+#   - on a published GitHub Release  → real publish
+#   - manual run (workflow_dispatch) → choose dry-run or real publish
+#
+# Setup (one-time): add a repo secret named CLAWHUB_TOKEN
+#   (Settings → Secrets and variables → Actions → New repository secret).
+#   Get the token from `clawhub login` locally, or your ClawHub account settings.
+#
+# The version is read from the skill's SKILL.md front matter (`version:`),
+# the single source of truth ClawHub displays — bump it there before releasing.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build the publish plan without uploading"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: clawhub-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish skill
+    runs-on: ubuntu-latest
+    env:
+      SKILL_DIR: wordpress-api-pro
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install ClawHub CLI
+        run: npm i -g clawhub
+
+      - name: Read skill version from SKILL.md
+        id: ver
+        run: |
+          VERSION=$(grep -m1 '^version:' "$SKILL_DIR/SKILL.md" | sed 's/^version:[[:space:]]*//' | tr -d '"' | tr -d "'" | xargs)
+          if [ -z "$VERSION" ]; then
+            echo "::error::Could not read 'version:' from $SKILL_DIR/SKILL.md"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Skill version: $VERSION"
+
+      - name: Authenticate
+        env:
+          CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}
+        run: |
+          if [ -z "$CLAWHUB_TOKEN" ]; then
+            echo "::error::CLAWHUB_TOKEN secret is not set. Add it under Settings → Secrets → Actions."
+            exit 1
+          fi
+          clawhub login --token "$CLAWHUB_TOKEN"
+
+      - name: Publish
+        env:
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+        run: |
+          ARGS=("$SKILL_DIR" --version "${{ steps.ver.outputs.version }}")
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "Dry run — no upload."
+            ARGS+=(--dry-run)
+          fi
+          clawhub skill publish "${ARGS[@]}"

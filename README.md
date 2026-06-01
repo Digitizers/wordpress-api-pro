@@ -305,6 +305,18 @@ python3 scripts/woo_products.py update --id 456 --description "Updated product d
 - ❌ Never commit credentials to git.
 - ❌ Never publish or update live content without explicit approval.
 
+## Publishing to ClawHub
+
+Releases are published to ClawHub automatically via GitHub Actions ([`.github/workflows/publish-clawhub.yml`](.github/workflows/publish-clawhub.yml)).
+
+**One-time setup:** add a repository secret named `CLAWHUB_TOKEN` (Settings → Secrets and variables → Actions). Get the token from `clawhub login` locally or your ClawHub account.
+
+**Release flow:**
+1. Bump the `version:` in `wordpress-api-pro/SKILL.md` (the source of truth ClawHub displays) and add a `CHANGELOG.md` entry.
+2. Publish a GitHub Release → the workflow installs the `clawhub` CLI, authenticates with `CLAWHUB_TOKEN`, and runs `clawhub skill publish wordpress-api-pro --version <version>`.
+
+Trigger it manually from the Actions tab (workflow_dispatch) with **dry-run on** to preview the publish plan without uploading.
+
 ## Documentation
 
 - **`wordpress-api-pro/SKILL.md`** — full skill instructions for OpenClaw agents.
