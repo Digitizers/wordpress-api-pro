@@ -1,6 +1,6 @@
 ---
 name: wordpress-api-pro
-version: 3.6.0
+version: 3.7.0
 license: MIT-0
 description: |
   WordPress REST API integration for managing posts, pages, media, WooCommerce products, Elementor content, SEO meta, ACF, and JetEngine fields.
@@ -199,6 +199,7 @@ python3 scripts/upload_media.py \
 - `scripts/acf_fields.py` — read/write ACF fields.
 - `scripts/seo_meta.py` — read/write Rank Math and Yoast SEO metadata.
 - `scripts/jetengine_fields.py` — read/write JetEngine custom fields.
+- `scripts/site_audit.py` — no-auth Tier-1 website audit (PageSpeed/SSL/security headers/CMS+PHP/SEO basics). Public probes only; run cold pre-sale.
 - `scripts/describe_cpt.py` — discover a CPT's rest_base, taxonomies, and field keys (read-only).
 - `scripts/seed_content.py` — batch-create CPT entries with ACF/Jet fields, taxonomies, and featured images from a JSON dataset. **Dry-run by default; pass `--execute` to write.**
 - `scripts/elementor_content.py` — read/update Elementor `_elementor_data`.

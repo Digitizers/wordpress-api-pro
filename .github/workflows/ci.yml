@@ -47,7 +47,9 @@ jobs:
         run: python -m compileall wordpress-api-pro/scripts
 
       - name: Unit tests
-        run: python3 tests/test_cpt_seeding.py
+        run: |
+          python3 tests/test_cpt_seeding.py
+          python3 tests/test_site_audit.py
 
       - name: Seed dry-run smoke (no network)
         run: |

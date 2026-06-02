@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.7.0 - 2026-06-02
+
+- Add `site_audit.py` — no-auth Tier-1 website audit (PageSpeed, SSL, security headers, CMS/PHP detection, SEO basics) emitting findings against the audit-engine thresholds. Stdlib-only; the sales-hook quick scan. Pure parsers unit-tested offline + wired into CI.
+
 ## 3.6.0 - 2026-06-02
 
 CPT content seeding (Tier-1 dynamic content).
