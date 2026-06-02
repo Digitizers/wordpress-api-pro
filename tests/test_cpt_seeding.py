@@ -44,5 +44,22 @@ class ResolveTermsTest(unittest.TestCase):
             self.assertEqual(out, {"project_category": [5]})
 
 
+import seed_content  # noqa: E402
+
+
+class SeedDryRunTest(unittest.TestCase):
+    def test_dry_run_plans_every_entry_without_network(self):
+        fixture = os.path.join(os.path.dirname(__file__), "fixtures", "seed.json")
+        with open(fixture) as f:
+            dataset = json.load(f)
+        plan = seed_content.plan_seed(dataset)
+        self.assertEqual(len(plan), 2)
+        self.assertEqual(plan[0]["post_type"], "projects")
+        self.assertIn("acf", plan[0]["will_set"])
+        self.assertIn("terms", plan[0]["will_set"])
+        self.assertEqual(plan[1]["featured_image_kind"], "url")
+        self.assertEqual(plan[0]["featured_image_kind"], "media_id")
+
+
 if __name__ == "__main__":
     unittest.main()
