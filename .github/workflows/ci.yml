@@ -46,6 +46,14 @@ jobs:
       - name: Compile Python scripts
         run: python -m compileall wordpress-api-pro/scripts
 
+      - name: Unit tests
+        run: python3 tests/test_cpt_seeding.py
+
+      - name: Seed dry-run smoke (no network)
+        run: |
+          python3 wordpress-api-pro/scripts/seed_content.py --dataset tests/fixtures/seed.json > /tmp/plan.json
+          python3 -c "import json;d=json.load(open('/tmp/plan.json'));assert d['dry_run'] and len(d['plan'])==2;print('smoke ok')"
+
       - name: Run package smoke tests
         run: npm test
 
