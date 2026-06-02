@@ -1,0 +1,21 @@
+[
+  {
+    "post_type": "projects",
+    "title": "Acme Rebrand",
+    "content": "<p>Full brand refresh.</p>",
+    "status": "draft",
+    "terms": { "project_category": ["Branding"] },
+    "featured_image": 42,
+    "acf": { "client": "Acme", "year": 2025 },
+    "jet": { "duration_weeks": 6 }
+  },
+  {
+    "post_type": "projects",
+    "title": "Globex Site",
+    "content": "<p>Marketing site.</p>",
+    "status": "draft",
+    "terms": { "project_category": ["Web"] },
+    "featured_image": "https://example.com/globex.jpg",
+    "acf": { "client": "Globex", "year": 2024 }
+  }
+]

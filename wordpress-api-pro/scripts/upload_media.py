@@ -118,46 +118,52 @@ def set_featured_image(url, username, app_credential, post_id, media_id):
         print(json.dumps({"error": str(e)}), file=sys.stderr)
         sys.exit(1)
 
-parser = argparse.ArgumentParser(description='Upload media to WordPress')
-parser.add_argument('--url', default=os.getenv('WP_URL'))
-parser.add_argument('--username', default=os.getenv('WP_USERNAME'))
-parser.add_argument('--app-password', default=os.getenv('WP_APP_PASSWORD'))
-parser.add_argument('--file', required=True, help='Local file path or URL')
-parser.add_argument('--title', help='Media title')
-parser.add_argument('--alt-text', help='Alt text for images')
-parser.add_argument('--caption', help='Media caption')
-parser.add_argument('--set-featured', action='store_true', help='Set as featured image')
-parser.add_argument('--post-id', type=int, help='Post ID (required with --set-featured)')
-parser.add_argument('--allow-remote-url', action='store_true', help='Explicitly allow fetching HTTPS remote media URLs')
 
-args = parser.parse_args()
+def main():
+    parser = argparse.ArgumentParser(description='Upload media to WordPress')
+    parser.add_argument('--url', default=os.getenv('WP_URL'))
+    parser.add_argument('--username', default=os.getenv('WP_USERNAME'))
+    parser.add_argument('--app-password', default=os.getenv('WP_APP_PASSWORD'))
+    parser.add_argument('--file', required=True, help='Local file path or URL')
+    parser.add_argument('--title', help='Media title')
+    parser.add_argument('--alt-text', help='Alt text for images')
+    parser.add_argument('--caption', help='Media caption')
+    parser.add_argument('--set-featured', action='store_true', help='Set as featured image')
+    parser.add_argument('--post-id', type=int, help='Post ID (required with --set-featured)')
+    parser.add_argument('--allow-remote-url', action='store_true', help='Explicitly allow fetching HTTPS remote media URLs')
 
-if not all([args.url, args.username, args.app_password]):
-    print(json.dumps({"error": "Missing credentials"}), file=sys.stderr)
-    sys.exit(1)
+    args = parser.parse_args()
 
-if args.set_featured and not args.post_id:
-    print(json.dumps({"error": "--post-id required when using --set-featured"}), file=sys.stderr)
-    sys.exit(1)
+    if not all([args.url, args.username, args.app_password]):
+        print(json.dumps({"error": "Missing credentials"}), file=sys.stderr)
+        sys.exit(1)
 
-# Upload media
-try:
-    result = upload_media(
-        args.url,
-        args.username,
-        args.app_password,
-        args.file,
-        title=args.title,
-        alt_text=args.alt_text,
-        caption=args.caption,
-        allow_remote_url=args.allow_remote_url,
-    )
-except SafetyError as e:
-    die_safety(e)
+    if args.set_featured and not args.post_id:
+        print(json.dumps({"error": "--post-id required when using --set-featured"}), file=sys.stderr)
+        sys.exit(1)
 
-# Set as featured image if requested
-if args.set_featured and 'id' in result:
-    set_featured_image(args.url, args.username, args.app_password, args.post_id, result['id'])
-    result['featured_image_set'] = True
+    # Upload media
+    try:
+        result = upload_media(
+            args.url,
+            args.username,
+            args.app_password,
+            args.file,
+            title=args.title,
+            alt_text=args.alt_text,
+            caption=args.caption,
+            allow_remote_url=args.allow_remote_url,
+        )
+    except SafetyError as e:
+        die_safety(e)
 
-print(json.dumps(result, indent=2))
+    # Set as featured image if requested
+    if args.set_featured and 'id' in result:
+        set_featured_image(args.url, args.username, args.app_password, args.post_id, result['id'])
+        result['featured_image_set'] = True
+
+    print(json.dumps(result, indent=2))
+
+
+if __name__ == '__main__':
+    main()
