@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.6.0 - 2026-06-02
+
+CPT content seeding (Tier-1 dynamic content).
+
+- `create_post.py` gains `--post-type` (resolves rest_base via `/wp/v2/types`) and `--terms` (name→id, create-missing); now importable.
+- New `describe_cpt.py` — read-only schema discovery (rest_base, taxonomies, sampled field keys).
+- New `seed_content.py` — batch-create CPT entries with ACF/Jet fields, taxonomies, and featured images from a JSON dataset. **Dry-run by default**; `--execute` to write; per-entry errors collected, batch continues. Dry-run/planning is stdlib-only (write-path deps imported lazily).
+- `upload_media.py` made importable (`__main__` guard).
+- CI runs new unit tests + an offline dry-run smoke.
+
 ## 3.5.1 - 2026-06-01
 
 ClawHub packaging compatibility.

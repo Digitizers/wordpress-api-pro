@@ -1,6 +1,6 @@
 ---
 name: wordpress-api-pro
-version: 3.5.1
+version: 3.6.0
 license: MIT-0
 description: |
   WordPress REST API integration for managing posts, pages, media, WooCommerce products, Elementor content, SEO meta, ACF, and JetEngine fields.
@@ -199,8 +199,24 @@ python3 scripts/upload_media.py \
 - `scripts/acf_fields.py` — read/write ACF fields.
 - `scripts/seo_meta.py` — read/write Rank Math and Yoast SEO metadata.
 - `scripts/jetengine_fields.py` — read/write JetEngine custom fields.
+- `scripts/describe_cpt.py` — discover a CPT's rest_base, taxonomies, and field keys (read-only).
+- `scripts/seed_content.py` — batch-create CPT entries with ACF/Jet fields, taxonomies, and featured images from a JSON dataset. **Dry-run by default; pass `--execute` to write.**
 - `scripts/elementor_content.py` — read/update Elementor `_elementor_data`.
 - `scripts/woo_products.py` — manage WooCommerce products.
+
+## Seeding dynamic content (CPT)
+
+For dynamic sites (JetEngine/ACF listings), populate the entries the listings render:
+
+1. `describe_cpt.py --post-type projects` — learn the rest_base, taxonomies, field keys.
+2. Write a JSON dataset (array of `{post_type, title, content, status, terms, featured_image, acf, jet}`).
+3. `seed_content.py --dataset data.json` — review the dry-run plan (no writes, stdlib-only).
+4. `seed_content.py --dataset data.json --execute` — create (drafts by default).
+
+Notes: the CPT, taxonomies, and ACF field-groups must already exist (admin-side).
+`featured_image` accepts a media id or a URL/path (URL fetch needs `--allow-remote-url`).
+`--execute` needs the `requests` dependency (used by the ACF/Jet writers). Re-running
+creates duplicates (no upsert yet).
 
 ## Verification before live writes
 
