@@ -1,8 +1,15 @@
-# WordPress API Pro — OpenClaw Skill
+# WordPress API Pro — Claude Code & OpenClaw Skill
 
 [![CI](https://github.com/Digitizers/wordpress-api-pro/actions/workflows/ci.yml/badge.svg)](https://github.com/Digitizers/wordpress-api-pro/actions/workflows/ci.yml)
+![Claude Code Skill](https://img.shields.io/badge/Claude_Code-Skill-d97757)
+![OpenClaw Skill](https://img.shields.io/badge/OpenClaw-Skill-purple)
+![WordPress](https://img.shields.io/badge/WordPress-REST_API-21759b)
+![License: MIT--0](https://img.shields.io/badge/License-MIT--0-green)
+![Version](https://img.shields.io/badge/version-3.7.0-blue)
 
-WordPress REST API integration skill for OpenClaw. Manage posts, pages, media, WooCommerce products, Elementor content, SEO metadata, ACF, JetEngine fields, and multi-site workflows programmatically — with explicit safety boundaries for agentic use.
+A production-grade **Claude Code & OpenClaw skill** for managing WordPress content via the REST API — posts, pages, media, WooCommerce, Elementor, SEO meta, ACF, JetEngine — with explicit safety boundaries for agentic use.
+
+This is not just a tool reference. It is an operational playbook for managing WordPress content responsibly: posts, pages, media, WooCommerce products, Elementor content, SEO metadata, and custom fields — with drafts-first, dry-run, and explicit-approval guardrails on every write.
 
 ## Features
 

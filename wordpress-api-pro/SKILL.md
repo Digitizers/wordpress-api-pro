@@ -3,7 +3,7 @@ name: wordpress-api-pro
 version: 3.7.0
 license: MIT-0
 description: |
-  WordPress REST API integration for managing posts, pages, media, WooCommerce products, Elementor content, SEO meta, ACF, and JetEngine fields.
+  Production-grade WordPress REST API integration for managing posts, pages, media, WooCommerce products, Elementor content, SEO meta, ACF, and JetEngine fields.
   Use when you need to retrieve, draft, create, or update WordPress content programmatically on sites where the user has provided explicit credentials.
   For any operation that writes to a live site, get explicit user approval for the target site, post/product IDs, and final action before executing.
   Prefer drafts first. Run batch operations in dry-run mode first; use --execute only after review. Remote URL media downloads and local file reads are restricted by safety boundaries.
