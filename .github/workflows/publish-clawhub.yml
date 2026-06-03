@@ -78,7 +78,7 @@ jobs:
           # and exiting without uploading.
           if [ "$DRY_RUN" = "true" ]; then
             echo "Dry run — would publish:"
-            echo "  clawhub skill publish $SKILL_DIR --version ${{ steps.ver.outputs.version }}"
+            echo "  clawhub skill publish $SKILL_DIR --slug wordpress-api-pro --name 'WordPress API Pro' --version ${{ steps.ver.outputs.version }}"
             exit 0
           fi
-          clawhub skill publish "$SKILL_DIR" --version "${{ steps.ver.outputs.version }}"
+          clawhub skill publish "$SKILL_DIR" --slug wordpress-api-pro --name "WordPress API Pro" --version "${{ steps.ver.outputs.version }}"

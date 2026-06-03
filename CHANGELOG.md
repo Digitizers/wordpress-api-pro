@@ -1,5 +1,8 @@
 # Changelog
 
+## 3.7.1 - 2026-06-04
+- ClawHub listing now publishes under the display name **WordPress API Pro** (`--name`) with a pinned slug (`--slug wordpress-api-pro`), instead of an auto-title-cased "Wordpress Api Pro".
+
 ## 3.7.0 - 2026-06-02
 
 - Add `site_audit.py` — no-auth Tier-1 website audit (PageSpeed, SSL, security headers, CMS/PHP detection, SEO basics) emitting findings against the audit-engine thresholds. Stdlib-only; the sales-hook quick scan. Pure parsers unit-tested offline + wired into CI.

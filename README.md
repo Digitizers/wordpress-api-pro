@@ -5,7 +5,7 @@
 ![OpenClaw Skill](https://img.shields.io/badge/OpenClaw-Skill-purple)
 ![WordPress](https://img.shields.io/badge/WordPress-REST_API-21759b)
 ![License: MIT--0](https://img.shields.io/badge/License-MIT--0-green)
-![Version](https://img.shields.io/badge/version-3.7.0-blue)
+![Version](https://img.shields.io/badge/version-3.7.1-blue)
 
 A production-grade **Claude Code & OpenClaw skill** for managing WordPress content via the REST API — posts, pages, media, WooCommerce, Elementor, SEO meta, ACF, JetEngine — with explicit safety boundaries for agentic use.
 

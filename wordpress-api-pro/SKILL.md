@@ -1,6 +1,6 @@
 ---
 name: wordpress-api-pro
-version: 3.7.0
+version: 3.7.1
 license: MIT-0
 description: |
   Production-grade WordPress REST API integration for managing posts, pages, media, WooCommerce products, Elementor content, SEO meta, ACF, and JetEngine fields.
