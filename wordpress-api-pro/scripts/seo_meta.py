@@ -28,6 +28,7 @@ import os
 import sys
 import requests
 from base64 import b64encode
+from security import warn_insecure_wp_url
 
 # Meta key mappings
 RANKMATH_KEYS = {
@@ -194,18 +195,19 @@ def main():
     
     # Validate required args
     if not args.url:
-        print(json.dumps({"error": "WordPress URL required (--url or WP_SITE_URL/WP_URL env var)"}), 
+        print(json.dumps({"error": "WordPress URL required (--url or WP_SITE_URL/WP_URL env var)"}),
               file=sys.stderr)
         sys.exit(1)
     if not args.username:
-        print(json.dumps({"error": "Username required (--username or WP_USER/WP_USERNAME env var)"}), 
+        print(json.dumps({"error": "Username required (--username or WP_USER/WP_USERNAME env var)"}),
               file=sys.stderr)
         sys.exit(1)
     if not args.app_password:
-        print(json.dumps({"error": "App password required (--app-password or WP_APP_PASSWORD env var)"}), 
+        print(json.dumps({"error": "App password required (--app-password or WP_APP_PASSWORD env var)"}),
               file=sys.stderr)
         sys.exit(1)
-    
+    warn_insecure_wp_url(args.url)
+
     try:
         # Detect only
         if args.detect:

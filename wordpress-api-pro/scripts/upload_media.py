@@ -3,7 +3,7 @@
 import argparse, json, os, sys, urllib.request, urllib.parse, urllib.error, mimetypes
 from base64 import b64encode
 
-from security import SafetyError, die_safety, fetch_https_media, validate_local_file
+from security import SafetyError, die_safety, fetch_https_media, validate_local_file, warn_insecure_wp_url
 
 def upload_media(url, username, app_credential, file_path, title=None, alt_text=None, caption=None, allow_remote_url=False):
     """Upload a media file to WordPress"""
@@ -137,6 +137,7 @@ def main():
     if not all([args.url, args.username, args.app_password]):
         print(json.dumps({"error": "Missing credentials"}), file=sys.stderr)
         sys.exit(1)
+    warn_insecure_wp_url(args.url)
 
     if args.set_featured and not args.post_id:
         print(json.dumps({"error": "--post-id required when using --set-featured"}), file=sys.stderr)

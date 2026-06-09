@@ -22,6 +22,12 @@ import urllib.request
 import urllib.error
 from base64 import b64encode
 
+# security.py lives alongside this script; insert its directory on the path if needed.
+import importlib.util as _ilu, pathlib as _pl
+if not _ilu.find_spec("security"):
+    sys.path.insert(0, str(_pl.Path(__file__).parent))
+from security import warn_insecure_wp_url
+
 def load_config(config_path=None):
     """Load sites configuration"""
     if config_path is None:
@@ -44,7 +50,8 @@ def update_post(site, post_id, updates, dry_run=False):
     if dry_run:
         print(f"  [DRY RUN] Would update post {post_id}: {updates}")
         return True
-    
+
+    warn_insecure_wp_url(site['url'])
     credentials = f"{site['username']}:{site['app_password']}".encode('utf-8')
     auth_header = b64encode(credentials).decode('ascii')
     
