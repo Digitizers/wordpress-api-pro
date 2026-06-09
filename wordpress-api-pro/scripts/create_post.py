@@ -2,7 +2,7 @@
 """Create a WordPress post or CPT entry via REST API (with taxonomy support)."""
 import argparse, json, os, sys, urllib.request, urllib.parse
 from base64 import b64encode
-from security import warn_insecure_wp_url
+from security import warn_insecure_wp_url, should_confirm_publish
 
 
 def _auth(username, password):
@@ -90,11 +90,17 @@ def main():
     p.add_argument('--post-type', default='post')
     p.add_argument('--featured-media', type=int)
     p.add_argument('--terms', help='JSON {"taxonomy": ["Name or id", ...]}')
+    p.add_argument('--yes', '-y', action='store_true', help='Skip the interactive publish confirmation.')
     a = p.parse_args()
     if not all([a.url, a.username, a.app_password]):
         print(json.dumps({"error": "Missing required credentials"}), file=sys.stderr)
         sys.exit(1)
     warn_insecure_wp_url(a.url)
+    if should_confirm_publish(a.status, a.yes, sys.stdin.isatty()):
+        print("About to PUBLISH live content to %s. Type 'PUBLISH' to confirm:" % a.url, file=sys.stderr)
+        if input("> ").strip() != "PUBLISH":
+            print("Aborted: publish not confirmed.", file=sys.stderr)
+            sys.exit(1)
     try:
         result = create_post(a.url, a.username, a.app_password, a.title, a.content,
                              a.status, post_type=a.post_type,

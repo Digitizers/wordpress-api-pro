@@ -1,6 +1,6 @@
 ---
 name: wordpress-api-pro
-version: 3.8.0
+version: 3.8.1
 license: MIT-0
 description: |
   Production-grade WordPress REST API integration for managing posts, pages, media, WooCommerce products, Elementor content, SEO meta, ACF, and JetEngine fields.
@@ -12,7 +12,7 @@ permissions:
   env:
     - "WP_URL / WP_SITE_URL, WP_USERNAME / WP_USER, WP_APP_PASSWORD (auth)"
     - "WP_CONFIG (optional sites.json path), WP_ALLOWED_FILE_ROOTS (file-read scope)"
-    - "WP_ALLOW_REMOTE_URLS, WP_REQUIRE_HTTPS, PAGESPEED_API_KEY"
+    - "WP_ALLOW_REMOTE_URLS, WP_REQUIRE_HTTPS, WP_REQUIRE_ALLOWLIST, PAGESPEED_API_KEY"
   network:
     - "Outbound HTTPS to the configured WordPress site(s) /wp-json/ REST API"
     - "https://www.googleapis.com/pagespeedonline (site_audit only)"
@@ -44,6 +44,8 @@ This skill runs the `scripts/*.py` directly. From the skill directory (`~/.claud
 - **Targeting every site is blocked by default.** Add `--allow-all` only when the user explicitly approved all configured sites.
 - **Local file reads are restricted.** `--content-file` and media uploads can read only from the current working directory by default. Set `WP_ALLOWED_FILE_ROOTS` to opt into another safe directory.
 - **Remote media URLs are opt-in.** `upload_media.py` requires `--allow-remote-url` or `WP_ALLOW_REMOTE_URLS=1`, allows HTTPS only, and blocks private/local network hosts.
+- **Raw SEO meta keys warn by default.** `seo_meta.py` emits a stderr WARNING when writing a key not in the Rank Math / Yoast allowlist. Set `WP_REQUIRE_ALLOWLIST=1` to refuse instead. ACF/JetEngine custom-field keys are unaffected — arbitrary keys are their intended API.
+- **Interactive publish confirmation on TTY.** `create_post.py` and `update_post.py` prompt for confirmation before `--status publish` when run interactively. Pass `--yes` / `-y` to bypass. Non-interactive/agent runs are unchanged.
 
 ## Authentication
 

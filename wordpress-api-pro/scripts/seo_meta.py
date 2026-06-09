@@ -26,7 +26,6 @@ import argparse
 import json
 import os
 import sys
-import requests
 from base64 import b64encode
 from security import warn_insecure_wp_url
 
@@ -51,7 +50,7 @@ YOAST_KEYS = {
 
 def detect_seo_plugin(url, username, password, post_id):
     """Detect which SEO plugin is active"""
-    
+    import requests
     credentials = f"{username}:{password}"
     auth_header = 'Basic ' + b64encode(credentials.encode()).decode()
     headers = {
@@ -84,7 +83,7 @@ def detect_seo_plugin(url, username, password, post_id):
 
 def get_seo_meta(url, username, password, post_id, plugin=None):
     """Get SEO meta fields"""
-    
+    import requests
     credentials = f"{username}:{password}"
     auth_header = 'Basic ' + b64encode(credentials.encode()).decode()
     headers = {
@@ -130,37 +129,62 @@ def get_seo_meta(url, username, password, post_id, plugin=None):
     except requests.exceptions.RequestException as e:
         return {"error": str(e)}
 
-def set_seo_meta(url, username, password, post_id, meta_dict, plugin='rankmath'):
-    """Set SEO meta fields"""
-    
-    credentials = f"{username}:{password}"
-    auth_header = 'Basic ' + b64encode(credentials.encode()).decode()
-    headers = {
-        'Authorization': auth_header,
-        'Content-Type': 'application/json'
-    }
-    
-    base_url = url.rstrip('/')
-    
-    # Map friendly names to actual meta keys
+def _map_meta_keys(meta_dict, plugin, env=None):
+    """Map friendly SEO key names to actual postmeta keys.
+
+    Returns (payload_dict, raw_warnings) where payload_dict is ready to POST
+    and raw_warnings is a list of (key, message) tuples for non-allowlisted keys.
+    With WP_REQUIRE_ALLOWLIST=1, raises ValueError for the first raw key found.
+    """
+    if env is None:
+        env = os.environ
     keys_map = RANKMATH_KEYS if plugin == 'rankmath' else YOAST_KEYS
-    
-    meta_payload = {}
+    payload = {}
+    raw_warnings = []
     for friendly_name, value in meta_dict.items():
         if friendly_name in keys_map:
             meta_key = keys_map[friendly_name]
             # Validate schema if it's Rank Math schema
             if friendly_name == 'schema' and plugin == 'rankmath':
                 try:
-                    # Ensure it's valid JSON
                     if isinstance(value, str):
                         json.loads(value)
                 except json.JSONDecodeError:
-                    return {"error": f"Invalid JSON for schema field"}
-            meta_payload[meta_key] = value
+                    raise ValueError("Invalid JSON for schema field")
+            payload[meta_key] = value
         else:
-            # Allow raw meta keys too
-            meta_payload[friendly_name] = value
+            # Raw (non-allowlisted) meta key. Allowed by default for flexibility,
+            # but surfaced so it's never silent. WP_REQUIRE_ALLOWLIST=1 refuses.
+            msg = (
+                "SEO meta: '%s' is not in the %s allowlist — writing it as a raw "
+                "postmeta key." % (friendly_name, plugin)
+            )
+            if env.get("WP_REQUIRE_ALLOWLIST") == "1":
+                raise ValueError(msg + " (WP_REQUIRE_ALLOWLIST=1 set — refusing.)")
+            raw_warnings.append((friendly_name, msg))
+            payload[friendly_name] = value
+    return payload, raw_warnings
+
+
+def set_seo_meta(url, username, password, post_id, meta_dict, plugin='rankmath'):
+    """Set SEO meta fields"""
+    import requests
+    credentials = f"{username}:{password}"
+    auth_header = 'Basic ' + b64encode(credentials.encode()).decode()
+    headers = {
+        'Authorization': auth_header,
+        'Content-Type': 'application/json'
+    }
+
+    base_url = url.rstrip('/')
+
+    try:
+        meta_payload, raw_warnings = _map_meta_keys(meta_dict, plugin)
+    except ValueError as exc:
+        return {"error": str(exc)}
+
+    for _key, msg in raw_warnings:
+        print("WARNING: " + msg, file=sys.stderr)
     
     try:
         payload = {'meta': meta_payload}
