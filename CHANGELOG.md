@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.8.1 — 2026-06-10
+
+Soft security guards (ClawHub audit follow-up, non-breaking):
+
+- SEO meta: writing a non-allowlisted (raw) postmeta key now emits a warning; set `WP_REQUIRE_ALLOWLIST=1` to refuse instead. ACF/JetEngine custom fields are unaffected (arbitrary keys are their intended API).
+- create_post / update_post: interactive confirmation before `--status publish` when run on a TTY; `--yes`/`-y` bypasses. Non-interactive/agent runs are unchanged.
+
 ## 3.8.0 — 2026-06-10
 
 Security hardening (ClawHub audit, safe-additive — no breaking changes):

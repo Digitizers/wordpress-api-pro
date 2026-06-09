@@ -19,7 +19,7 @@ import urllib.request
 import urllib.error
 from base64 import b64encode
 
-from security import SafetyError, TEXT_MAX_BYTES, die_safety, validate_local_file, warn_insecure_wp_url
+from security import SafetyError, TEXT_MAX_BYTES, die_safety, validate_local_file, warn_insecure_wp_url, should_confirm_publish
 
 def update_post(url, username, app_credential, post_id, **updates):
     """Update WordPress post via REST API"""
@@ -85,14 +85,20 @@ def main():
     parser.add_argument('--status', choices=['publish', 'draft', 'pending', 'private'], help='Post status')
     parser.add_argument('--featured-media', type=int, help='Featured image ID')
     parser.add_argument('--content-file', help='Read content from file')
-    
+    parser.add_argument('--yes', '-y', action='store_true', help='Skip the interactive publish confirmation.')
+
     args = parser.parse_args()
-    
+
     # Validate required args
     if not args.url:
         print(json.dumps({"error": "WordPress URL required (--url or WP_URL)"}), file=sys.stderr)
         sys.exit(1)
     warn_insecure_wp_url(args.url)
+    if should_confirm_publish(args.status, args.yes, sys.stdin.isatty()):
+        print("About to PUBLISH live content to %s. Type 'PUBLISH' to confirm:" % args.url, file=sys.stderr)
+        if input("> ").strip() != "PUBLISH":
+            print("Aborted: publish not confirmed.", file=sys.stderr)
+            sys.exit(1)
     if not args.username:
         print(json.dumps({"error": "Username required (--username or WP_USERNAME)"}), file=sys.stderr)
         sys.exit(1)

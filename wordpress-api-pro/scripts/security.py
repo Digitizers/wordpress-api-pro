@@ -166,6 +166,13 @@ def warn_insecure_wp_url(url, env=None):
     return url
 
 
+def should_confirm_publish(status, assume_yes, is_tty):
+    """True only when we should interactively prompt before a live publish:
+    going to 'publish', not pre-approved with --yes, and attached to a TTY.
+    Non-interactive (agent/CI) contexts return False -> behavior unchanged."""
+    return status == "publish" and not assume_yes and bool(is_tty)
+
+
 def die_safety(error: Exception) -> None:
     print(f"Safety error: {error}", file=sys.stderr)
     sys.exit(2)
