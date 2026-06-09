@@ -2,6 +2,7 @@
 """Manage Elementor page content via REST API"""
 import argparse, json, os, sys, urllib.request
 from base64 import b64encode
+from security import warn_insecure_wp_url
 
 def get_elementor_data(url, username, password, post_id):
     """Get Elementor data for a page"""
@@ -127,6 +128,7 @@ args = parser.parse_args()
 if not all([args.url, args.username, args.app_password]):
     print(json.dumps({"error": "Missing credentials"}), file=sys.stderr)
     sys.exit(1)
+warn_insecure_wp_url(args.url)
 
 if args.action == 'get':
     result = get_elementor_data(args.url, args.username, args.app_password, args.post_id)

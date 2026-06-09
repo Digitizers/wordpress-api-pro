@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.8.0 — 2026-06-10
+
+Security hardening (ClawHub audit, safe-additive — no breaking changes):
+
+- Warn on plaintext http:// WordPress URLs (Basic-Auth credentials would be sent in cleartext); set WP_REQUIRE_HTTPS=1 to refuse instead. Localhost/dev hosts exempt.
+- SKILL.md description now discloses the no-auth site-audit / fingerprinting capability.
+- Added an explicit permissions declaration (env / network / filesystem / shell).
+
 ## 3.7.1 - 2026-06-04
 - ClawHub listing now publishes under the display name **WordPress API Pro** (`--name`) with a pinned slug (`--slug wordpress-api-pro`), instead of an auto-title-cased "Wordpress Api Pro".
 

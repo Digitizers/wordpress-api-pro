@@ -19,7 +19,7 @@ import urllib.request
 import urllib.error
 from base64 import b64encode
 
-from security import SafetyError, TEXT_MAX_BYTES, die_safety, validate_local_file
+from security import SafetyError, TEXT_MAX_BYTES, die_safety, validate_local_file, warn_insecure_wp_url
 
 def update_post(url, username, app_credential, post_id, **updates):
     """Update WordPress post via REST API"""
@@ -92,6 +92,7 @@ def main():
     if not args.url:
         print(json.dumps({"error": "WordPress URL required (--url or WP_URL)"}), file=sys.stderr)
         sys.exit(1)
+    warn_insecure_wp_url(args.url)
     if not args.username:
         print(json.dumps({"error": "Username required (--username or WP_USERNAME)"}), file=sys.stderr)
         sys.exit(1)

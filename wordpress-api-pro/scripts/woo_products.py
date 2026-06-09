@@ -2,6 +2,7 @@
 """Manage WooCommerce products via REST API"""
 import argparse, json, os, sys, urllib.request, urllib.parse
 from base64 import b64encode
+from security import warn_insecure_wp_url
 
 def make_wc_request(url, consumer_key, consumer_secret, endpoint, method='GET', data=None):
     """Make a WooCommerce REST API request"""
@@ -103,6 +104,7 @@ args = parser.parse_args()
 if not all([args.url, args.consumer_key, args.consumer_secret]):
     print(json.dumps({"error": "Missing WooCommerce credentials (--consumer-key, --consumer-secret)"}), file=sys.stderr)
     sys.exit(1)
+warn_insecure_wp_url(args.url)
 
 if args.action == 'list':
     result = list_products(args.url, args.consumer_key, args.consumer_secret, args.per_page, args.page)

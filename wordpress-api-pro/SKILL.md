@@ -1,12 +1,24 @@
 ---
 name: wordpress-api-pro
-version: 3.7.1
+version: 3.8.0
 license: MIT-0
 description: |
   Production-grade WordPress REST API integration for managing posts, pages, media, WooCommerce products, Elementor content, SEO meta, ACF, and JetEngine fields.
   Use when you need to retrieve, draft, create, or update WordPress content programmatically on sites where the user has provided explicit credentials.
   For any operation that writes to a live site, get explicit user approval for the target site, post/product IDs, and final action before executing.
   Prefer drafts first. Run batch operations in dry-run mode first; use --execute only after review. Remote URL media downloads and local file reads are restricted by safety boundaries.
+  Also includes a no-auth Tier-1 site audit (PageSpeed, SSL, security headers, CMS/PHP fingerprint, SEO basics) for cold pre-sale checks, and authenticated plugin/SEO-stack discovery.
+permissions:
+  env:
+    - "WP_URL / WP_SITE_URL, WP_USERNAME / WP_USER, WP_APP_PASSWORD (auth)"
+    - "WP_CONFIG (optional sites.json path), WP_ALLOWED_FILE_ROOTS (file-read scope)"
+    - "WP_ALLOW_REMOTE_URLS, WP_REQUIRE_HTTPS, PAGESPEED_API_KEY"
+  network:
+    - "Outbound HTTPS to the configured WordPress site(s) /wp-json/ REST API"
+    - "https://www.googleapis.com/pagespeedonline (site_audit only)"
+  filesystem:
+    - "Read-only, scoped to WP_ALLOWED_FILE_ROOTS (default: cwd)"
+  shell: "none (Python only; no shell-out)"
 ---
 
 # WordPress API Pro

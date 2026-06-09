@@ -11,6 +11,7 @@ Usage:
 Env: WP_URL/WP_SITE_URL, WP_USERNAME/WP_USER, WP_APP_PASSWORD
 """
 import argparse, json, os, sys
+from security import warn_insecure_wp_url
 
 # NB: the write-path modules (acf_fields/jetengine_fields) import `requests`, and
 # the image path needs upload_media. They are imported lazily inside seed() so the
@@ -98,6 +99,7 @@ def main():
 
     if not all([a.url, a.username, a.app_password]):
         print(json.dumps({"error": "Missing required credentials"}), file=sys.stderr); sys.exit(1)
+    warn_insecure_wp_url(a.url)
     result = seed(a.url, a.username, a.app_password, dataset, allow_remote=a.allow_remote_url)
     print(json.dumps(result, indent=2))
     if result['failed']:

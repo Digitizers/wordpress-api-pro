@@ -141,6 +141,31 @@ def fetch_https_media(url: str, *, timeout: int = 20, max_bytes: int = DEFAULT_M
     return response, body
 
 
+def warn_insecure_wp_url(url, env=None):
+    """Warn when a WordPress API URL is plaintext http:// on a non-local host.
+    Basic-Auth credentials would travel unencrypted. Localhost/dev hosts are exempt.
+    With WP_REQUIRE_HTTPS=1 this raises SafetyError instead of warning.
+    Returns the url unchanged (never mutates it)."""
+    env = env if env is not None else os.environ
+    parsed = urllib.parse.urlparse(url if "://" in str(url) else "https://" + str(url))
+    host = (parsed.hostname or "").lower()
+    is_local = (
+        host in ("localhost", "127.0.0.1", "0.0.0.0", "::1")
+        or host.endswith(".local")
+        or host.endswith(".test")
+        or host.endswith(".localhost")
+    )
+    if parsed.scheme == "http" and not is_local:
+        msg = (
+            "SECURITY WARNING: WordPress URL '%s' uses plaintext http:// — "
+            "Basic-Auth credentials will be sent unencrypted. Use https:// in production." % url
+        )
+        if env.get("WP_REQUIRE_HTTPS") == "1":
+            raise SafetyError(msg + " (WP_REQUIRE_HTTPS=1 set — refusing.)")
+        print(msg, file=sys.stderr)
+    return url
+
+
 def die_safety(error: Exception) -> None:
     print(f"Safety error: {error}", file=sys.stderr)
     sys.exit(2)

@@ -2,6 +2,7 @@
 """Create a WordPress post or CPT entry via REST API (with taxonomy support)."""
 import argparse, json, os, sys, urllib.request, urllib.parse
 from base64 import b64encode
+from security import warn_insecure_wp_url
 
 
 def _auth(username, password):
@@ -93,6 +94,7 @@ def main():
     if not all([a.url, a.username, a.app_password]):
         print(json.dumps({"error": "Missing required credentials"}), file=sys.stderr)
         sys.exit(1)
+    warn_insecure_wp_url(a.url)
     try:
         result = create_post(a.url, a.username, a.app_password, a.title, a.content,
                              a.status, post_type=a.post_type,
