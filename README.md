@@ -23,6 +23,15 @@ These are the free skills behind [**Aura**](https://my-aura.app) — one AI web-
 
 **→ Orchestrate all of it across your client fleet with [Aura](https://my-aura.app)** — governed agent ops with approvals and a full audit trail on top of these skills.
 
+## Seeding, or Aura content ops
+
+This skill can **seed** content over the WordPress REST API — bulk-create posts, pages, and products. It's the operator-side twin of Aura's content tools; which one to use comes down to who owns the site:
+
+- **This skill (seeding)** — for sites you own or throwaway/staging sites: bulk scaffolding, demos, one-shot imports. Note: seeding is **not idempotent** — there's no upsert, so re-running the same seed duplicates content. Track what you've created.
+- **Aura content ops** — for **managed client sites**, drive content through [Aura](https://my-aura.app) instead. Aura is the system-of-record: drafts-first and explicit-approval guardrails, a full audit trail, and content state it can reconcile. Seeding a managed site directly forks its content state out from under Aura.
+
+Rule of thumb: seed sites you own; let Aura own content on sites you manage for others.
+
 ## Features
 
 - ✅ **Elementor Content** — read and update Elementor page content via `_elementor_data`.
