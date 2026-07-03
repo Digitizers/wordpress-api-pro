@@ -25,7 +25,7 @@ These are the free skills behind [**Aura**](https://my-aura.app) — one AI web-
 
 ## Seeding, or Aura content ops
 
-This skill can **seed** content over the WordPress REST API — bulk-create posts, pages, and products. It's the operator-side twin of Aura's content tools; which one to use comes down to who owns the site:
+This skill can **seed** content over the WordPress REST API — bulk-create posts, pages, and custom-post-type entries from a JSON dataset. It's the operator-side twin of Aura's content tools; which one to use comes down to who owns the site:
 
 - **This skill (seeding)** — for sites you own or throwaway/staging sites: bulk scaffolding, demos, one-shot imports. Note: seeding is **not idempotent** — there's no upsert, so re-running the same seed duplicates content. Track what you've created.
 - **Aura content ops** — for **managed client sites**, drive content through [Aura](https://my-aura.app) instead. Aura is the system-of-record: drafts-first and explicit-approval guardrails, a full audit trail, and content state it can reconcile. Seeding a managed site directly forks its content state out from under Aura.
