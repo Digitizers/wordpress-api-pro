@@ -65,21 +65,26 @@ def get_jetengine_fields(url, username, password, post_id, field_name=None):
     except requests.exceptions.RequestException as e:
         return {"error": str(e)}
 
-def set_jetengine_fields(url, username, password, post_id, fields_dict):
-    """Set JetEngine fields (via postmeta)"""
-    
+def set_jetengine_fields(url, username, password, post_id, fields_dict, rest_base="posts"):
+    """Set JetEngine fields (via postmeta).
+
+    `rest_base` is the REST base of the target post type (default "posts"). For a
+    custom post type pass its rest_base so the write hits /wp/v2/{rest_base}/{id};
+    writing to /posts/ silently no-ops on a CPT.
+    """
+
     credentials = f"{username}:{password}"
     auth_header = 'Basic ' + b64encode(credentials.encode()).decode()
     headers = {
         'Authorization': auth_header,
         'Content-Type': 'application/json'
     }
-    
+
     base_url = url.rstrip('/')
-    
+
     try:
         payload = {'meta': fields_dict}
-        response = requests.post(f"{base_url}/wp-json/wp/v2/posts/{post_id}", 
+        response = requests.post(f"{base_url}/wp-json/wp/v2/{rest_base}/{post_id}",
                                headers=headers, json=payload, timeout=10)
         if response.status_code in [200, 201]:
             return response.json()

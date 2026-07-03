@@ -1,6 +1,6 @@
 {
   "name": "wordpress-api-pro",
-  "version": "3.8.1",
+  "version": "3.8.2",
   "description": "WordPress REST API integration skill for OpenClaw - manage posts, pages, media, WooCommerce, Elementor, and metadata with explicit safety boundaries",
   "private": true,
   "main": "wordpress-api-pro/SKILL.md",

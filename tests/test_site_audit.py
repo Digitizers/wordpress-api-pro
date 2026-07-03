@@ -1,4 +1,5 @@
-import os, sys, unittest
+import io, os, sys, unittest, urllib.error
+from unittest import mock
 
 SCRIPTS = os.path.join(os.path.dirname(__file__), "..", "wordpress-api-pro", "scripts")
 sys.path.insert(0, os.path.abspath(SCRIPTS))
@@ -68,6 +69,31 @@ class PageSpeedTest(unittest.TestCase):
         self.assertEqual(sa.grade_pagespeed(0.95), "pass")
         self.assertEqual(sa.grade_pagespeed(0.80), "warn")
         self.assertEqual(sa.grade_pagespeed(0.50), "fail")
+
+
+class GetHttpErrorTest(unittest.TestCase):
+    def test_http_error_returns_structured_result(self):
+        """A 4xx/5xx must return (code, headers, url, body) so status/header/SEO
+        checks still run — an HTTP error page is a *reachable* server, not
+        'unreachable'."""
+        err = urllib.error.HTTPError(
+            url="http://example.com/x", code=403, msg="Forbidden",
+            hdrs={"Content-Type": "text/html", "Server": "nginx"},
+            fp=io.BytesIO(b"<html>denied</html>"))
+        with mock.patch.object(sa.urllib.request, "urlopen", side_effect=err):
+            code, headers, final_url, body = sa._get("http://example.com/x")
+        self.assertEqual(code, 403)
+        self.assertEqual(final_url, "http://example.com/x")
+        self.assertEqual(body, "<html>denied</html>")
+        self.assertIn("Content-Type", headers)
+
+    def test_connection_error_still_propagates(self):
+        """DNS/timeout/refused (URLError) must still propagate → audit() marks
+        the site unreachable."""
+        with mock.patch.object(sa.urllib.request, "urlopen",
+                               side_effect=urllib.error.URLError("name resolution failed")):
+            with self.assertRaises(urllib.error.URLError):
+                sa._get("http://nonexistent.invalid")
 
 
 if __name__ == "__main__":

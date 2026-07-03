@@ -33,6 +33,21 @@ def resolve_rest_base(base_url, auth, post_type):
         return post_type
 
 
+def resolve_taxonomy_rest_base(base_url, auth, taxonomy):
+    """Resolve a taxonomy's REST base; fall back to the slug on any error.
+
+    Taxonomies live under /wp/v2/taxonomies/{taxonomy}, NOT /wp/v2/types/{...}
+    (that's the post-type endpoint and 404s for a taxonomy). Using the wrong
+    endpoint would silently fall back to the slug and break any taxonomy with a
+    renamed rest_base.
+    """
+    try:
+        info = _get(f"{base_url.rstrip('/')}/wp-json/wp/v2/taxonomies/{taxonomy}", auth)
+        return info.get('rest_base') or taxonomy
+    except Exception:
+        return taxonomy
+
+
 def resolve_terms(base_url, auth, terms_dict, create_missing=True):
     """Map {taxonomy: [name|id, ...]} -> {taxonomy: [id, ...]}.
 
@@ -42,7 +57,7 @@ def resolve_terms(base_url, auth, terms_dict, create_missing=True):
     base_url = base_url.rstrip('/')
     out = {}
     for taxonomy, values in (terms_dict or {}).items():
-        tax_base = resolve_rest_base(base_url, auth, taxonomy)  # taxonomy rest_base
+        tax_base = resolve_taxonomy_rest_base(base_url, auth, taxonomy)  # taxonomy rest_base
         ids = []
         for v in values:
             if isinstance(v, int) or (isinstance(v, str) and v.isdigit()):
@@ -98,7 +113,8 @@ def main():
     warn_insecure_wp_url(a.url)
     if should_confirm_publish(a.status, a.yes, sys.stdin.isatty()):
         print("About to PUBLISH live content to %s. Type 'PUBLISH' to confirm:" % a.url, file=sys.stderr)
-        if input("> ").strip() != "PUBLISH":
+        print("> ", end="", file=sys.stderr)
+        if input().strip() != "PUBLISH":
             print("Aborted: publish not confirmed.", file=sys.stderr)
             sys.exit(1)
     try:

@@ -9,7 +9,7 @@ Usage:
     python3 site_audit.py https://example.com --summary
 Env (optional): PAGESPEED_API_KEY  (higher PageSpeed Insights quota)
 """
-import argparse, json, os, re, ssl, socket, sys, urllib.request, urllib.parse
+import argparse, json, os, re, ssl, socket, sys, urllib.request, urllib.parse, urllib.error
 from datetime import datetime, timezone
 
 UA = "Mozilla/5.0 (compatible; DigitizerAudit/1.0)"
@@ -84,9 +84,17 @@ def grade_pagespeed(score):
 # ---- fetching (network; not unit-tested) -----------------------------------
 def _get(url, method="GET", timeout=15):
     req = urllib.request.Request(url, method=method, headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        body = r.read().decode("utf-8", "replace") if method == "GET" else ""
-        return r.getcode(), dict(r.headers), r.geturl(), body
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            body = r.read().decode("utf-8", "replace") if method == "GET" else ""
+            return r.getcode(), dict(r.headers), r.geturl(), body
+    except urllib.error.HTTPError as e:
+        # An HTTP 4xx/5xx is a *reachable* server — return its status, headers,
+        # url and body so the status/header/SEO checks still run. Only DNS /
+        # timeout / connection-refused (URLError, socket errors) mean unreachable,
+        # and those propagate to the caller's generic except.
+        body = e.read().decode("utf-8", "replace") if method == "GET" else ""
+        return e.code, dict(e.headers), e.geturl(), body
 
 
 def _ssl_notafter(host, port=443, timeout=10):
@@ -200,7 +208,10 @@ def main():
         url = "https://" + url
     result = audit(url, api_key=os.getenv("PAGESPEED_API_KEY"))
     print(_summary(result) if a.summary else json.dumps(result, indent=2))
-    if result["reachable"] and any(f["status"] == "fail" for f in result["findings"]):
+    # Exit non-zero for a truly unreachable target (DNS/timeout/refused) OR any
+    # failing check — otherwise CI/automation would read an unreachable site as
+    # a false success.
+    if (not result["reachable"]) or any(f["status"] == "fail" for f in result["findings"]):
         sys.exit(2)
 
 
