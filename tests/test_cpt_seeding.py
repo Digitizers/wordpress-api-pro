@@ -67,7 +67,10 @@ class ResolveTermsTest(unittest.TestCase):
             self.assertEqual(out, {"project_category": [5]})
 
     def test_term_resolution_queries_taxonomy_rest_base(self):
-        """The term search + create must use the taxonomy's rest_base in the URL."""
+        """The term search + create must use the taxonomy's rest_base in the URL,
+        AND the result must be keyed by that rest_base (`genre`), not the taxonomy
+        slug (`music_genre`) — the post endpoint expects term ids under the
+        rest_base field, so a renamed base must survive end-to-end."""
         seen = []
 
         def fake_urlopen(req, *a, **k):
@@ -81,7 +84,8 @@ class ResolveTermsTest(unittest.TestCase):
             out = create_post.resolve_terms("http://x", "a",
                                              {"music_genre": ["Jazz"]},
                                              create_missing=False)
-        self.assertEqual(out, {"music_genre": [9]})
+        self.assertEqual(out, {"genre": [9]})  # keyed by rest_base, not slug
+        self.assertNotIn("music_genre", out)
         self.assertTrue(any("/wp-json/wp/v2/genre?search=" in u for u in seen))
 
 

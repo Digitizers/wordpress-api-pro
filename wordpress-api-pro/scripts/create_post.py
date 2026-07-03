@@ -49,10 +49,14 @@ def resolve_taxonomy_rest_base(base_url, auth, taxonomy):
 
 
 def resolve_terms(base_url, auth, terms_dict, create_missing=True):
-    """Map {taxonomy: [name|id, ...]} -> {taxonomy: [id, ...]}.
+    """Map {taxonomy: [name|id, ...]} -> {rest_base: [id, ...]}.
 
     Names are resolved (and optionally created) via the taxonomy's REST base.
-    Integer-like values pass through as ids.
+    Integer-like values pass through as ids. The returned dict is keyed by the
+    taxonomy's REST base (e.g. `genres`, `categories`), NOT the taxonomy slug —
+    that is the field the post endpoint expects term ids under, so a taxonomy
+    with a custom rest_base (or the built-in category/post_tag whose bases are
+    categories/tags) attaches correctly.
     """
     base_url = base_url.rstrip('/')
     out = {}
@@ -72,7 +76,7 @@ def resolve_terms(base_url, auth, terms_dict, create_missing=True):
                 ids.append(created['id'])
             else:
                 raise ValueError(f"Term '{v}' not found in '{taxonomy}'")
-        out[taxonomy] = ids
+        out[tax_base] = ids  # key by REST base, not slug — that's the post field
     return out
 
 
@@ -87,9 +91,9 @@ def create_post(url, username, password, title, content, status='draft',
     if featured_media:
         data['featured_media'] = int(featured_media)
     if terms:
-        resolved = resolve_terms(base, auth, terms)
-        for taxonomy, ids in resolved.items():
-            data[taxonomy] = ids  # REST accepts the taxonomy key with term ids
+        resolved = resolve_terms(base, auth, terms)  # keyed by REST base
+        for tax_base, ids in resolved.items():
+            data[tax_base] = ids  # post endpoint expects term ids under the rest_base
 
     return _post(f"{base}/wp-json/wp/v2/{rest_base}", auth, data)
 
