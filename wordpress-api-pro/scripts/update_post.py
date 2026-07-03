@@ -96,7 +96,8 @@ def main():
     warn_insecure_wp_url(args.url)
     if should_confirm_publish(args.status, args.yes, sys.stdin.isatty()):
         print("About to PUBLISH live content to %s. Type 'PUBLISH' to confirm:" % args.url, file=sys.stderr)
-        if input("> ").strip() != "PUBLISH":
+        print("> ", end="", file=sys.stderr)
+        if input().strip() != "PUBLISH":
             print("Aborted: publish not confirmed.", file=sys.stderr)
             sys.exit(1)
     if not args.username:

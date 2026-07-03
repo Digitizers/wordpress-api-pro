@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.8.2 — 2026-06-12
+
+Codex review fixes:
+
+- Seeding: featured-image failures raise (were sys.exit) so one bad image no longer aborts the whole batch; ACF/JetEngine field writes and featured media now route through the CPT's rest_base (were silently no-op'ing on custom post types).
+- Taxonomy rest_base resolved via /wp/v2/taxonomies (was the post-type endpoint).
+- site_audit: HTTP 4xx/5xx pages are audited (status/headers/SEO) instead of reported unreachable; truly unreachable targets exit non-zero.
+- Machine-readable stdout: the publish-confirm prompt no longer writes to stdout (stderr only).
+- Permissions disclosure notes plaintext-HTTP egress is permitted (warn-only) unless WP_REQUIRE_HTTPS=1.
+
 ## 3.8.1 — 2026-06-10
 
 Soft security guards (ClawHub audit follow-up, non-breaking):

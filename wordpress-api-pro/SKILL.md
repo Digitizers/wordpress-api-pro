@@ -1,6 +1,6 @@
 ---
 name: wordpress-api-pro
-version: 3.8.1
+version: 3.8.2
 license: MIT-0
 description: |
   Production-grade WordPress REST API integration for managing posts, pages, media, WooCommerce products, Elementor content, SEO meta, ACF, and JetEngine fields.
@@ -14,7 +14,7 @@ permissions:
     - "WP_CONFIG (optional sites.json path), WP_ALLOWED_FILE_ROOTS (file-read scope)"
     - "WP_ALLOW_REMOTE_URLS, WP_REQUIRE_HTTPS, WP_REQUIRE_ALLOWLIST, PAGESPEED_API_KEY"
   network:
-    - "Outbound HTTPS to the configured WordPress site(s) /wp-json/ REST API"
+    - "Outbound HTTP/HTTPS to the configured WordPress site(s) /wp-json/ REST API — plaintext http:// is permitted (warn-only) unless WP_REQUIRE_HTTPS=1"
     - "https://www.googleapis.com/pagespeedonline (site_audit only)"
   filesystem:
     - "Read-only, scoped to WP_ALLOWED_FILE_ROOTS (default: cwd)"
