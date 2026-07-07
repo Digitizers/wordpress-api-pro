@@ -17,7 +17,7 @@ These are the free skills behind [**Aura**](https://my-aura.app) — one AI web-
 
 | Stage | Skill | Role |
 | --- | --- | --- |
-| 🎨 Build | [claude-elementor-pro](https://github.com/Digitizers/claude-elementor-pro) | Design & build sites inside Elementor |
+| 🎨 Build | [siteagent-elementor-studio](https://github.com/Digitizers/siteagent-elementor-studio) | Design & build sites inside Elementor |
 | 🔎 Audit + Content | [**wordpress-api-pro** ← you are here](https://github.com/Digitizers/wordpress-api-pro) | REST content ops, SEO & site audits |
 | 🖥 Host | [cloudways-mcp](https://github.com/Digitizers/cloudways-mcp) · [hostinger-mcp](https://github.com/Digitizers/hostinger-mcp) | Provision & operate the infrastructure |
 
@@ -89,7 +89,7 @@ bash INSTALL.sh
 
 Then restart Claude Code, export `WP_URL` / `WP_USERNAME` / `WP_APP_PASSWORD` (or set up `config/sites.json`), and ask Claude to use it. The ACF / SEO / JetEngine / plugin-detection scripts need `requests` (`pip install requests`); the core post/page/media/WooCommerce/batch scripts use the Python stdlib only.
 
-> Pairs well with the [Elementor MCP kit](https://github.com/Digitizers/claude-elementor-pro): build pages with the MCP, then handle media uploads, SEO meta, custom fields, and WooCommerce with these scripts.
+> Pairs well with the [Elementor MCP kit](https://github.com/Digitizers/siteagent-elementor-studio): build pages with the MCP, then handle media uploads, SEO meta, custom fields, and WooCommerce with these scripts.
 
 ## Quick Start
 
