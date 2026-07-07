@@ -32,7 +32,7 @@ This skill runs the `scripts/*.py` directly. From the skill directory (`~/.claud
 - **Auth:** export `WP_URL` / `WP_USERNAME` / `WP_APP_PASSWORD`, or use `config/sites.json` for multi-site.
 - **Dependencies:** the ACF / SEO / JetEngine / plugin-detection scripts need `requests` (`python3 -m pip install requests`, ideally in a venv). The core post/page/media/WooCommerce/batch scripts use the stdlib only.
 - **Local dev sites** (e.g. `http://site.local`) work — the private/HTTP restriction applies only to `--allow-remote-url` media downloads, not the WP API base URL.
-- **Pairs with the Elementor MCP kit** (`claude-elementor-pro`): build page structure with the MCP, then do media uploads, SEO meta, custom fields, and WooCommerce here.
+- **Pairs with the Elementor MCP kit** (`siteagent-elementor-studio`): build page structure with the MCP, then do media uploads, SEO meta, custom fields, and WooCommerce here.
 
 ## Safety rules
 
