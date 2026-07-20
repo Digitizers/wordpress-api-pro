@@ -87,6 +87,22 @@ cd wordpress-api-pro
 bash INSTALL.sh
 ```
 
+### Windows note
+
+The plugin ships its skill through a git **symlink** (`skills/` → the in-repo
+source). On Windows, enable Developer Mode and set
+`git config --global core.symlinks true` **before** cloning or installing —
+the plugin cache clone inherits it. Changing the config does not repair an
+existing checkout (the repo may have recorded `core.symlinks=false` locally).
+To repair one, run these two commands inside it (the second re-materializes
+only the plugin's symlink entries, so nothing else in your working tree is
+touched):
+
+    git config core.symlinks true
+    git checkout -- skills/ .claude/skills/
+
+Or simply re-clone. WSL also works. macOS/Linux need nothing.
+
 Then restart Claude Code, export `WP_URL` / `WP_USERNAME` / `WP_APP_PASSWORD` (or set up `config/sites.json`), and ask Claude to use it. The ACF / SEO / JetEngine / plugin-detection scripts need `requests` (`pip install requests`); the core post/page/media/WooCommerce/batch scripts use the Python stdlib only.
 
 > Pairs well with the [Elementor MCP kit](https://github.com/Digitizers/siteagent-elementor-studio): build pages with the MCP, then handle media uploads, SEO meta, custom fields, and WooCommerce with these scripts.

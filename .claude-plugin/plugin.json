@@ -1,0 +1,6 @@
+{
+  "name": "wordpress-api-pro",
+  "displayName": "WordPress API Pro",
+  "description": "Manage WordPress sites via REST API — posts, media, Elementor content, ACF/JetEngine fields, WooCommerce, SEO meta, site audit, and safe batch operations.",
+  "author": { "name": "Digitizer" }
+}
