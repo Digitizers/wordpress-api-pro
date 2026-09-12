@@ -90,14 +90,27 @@ def validate_remote_url(url: str) -> str:
     if not parsed.hostname:
         raise SafetyError("Remote URL must include a hostname")
 
-    hostname = parsed.hostname
+    _assert_public_host(parsed.hostname)
+    return url
+
+
+def _assert_public_host(hostname: str) -> None:
+    """Raise SafetyError unless every address the hostname resolves to is public.
+
+    Shared by validate_remote_url (media downloads, HTTPS only) and
+    validate_probe_url (the site audit, which must also reach http://).
+    Note: this resolves the name, and urlopen resolves it again, so a
+    DNS-rebinding attacker retains a narrow window. It still closes the
+    plain "audit http://192.168.1.1/" case, which is the realistic one.
+    """
+
     try:
         addresses = list(_hostname_addresses(hostname))
     except socket.gaierror as exc:
-        raise SafetyError(f"Could not resolve remote URL host {hostname!r}: {exc}") from exc
+        raise SafetyError(f"Could not resolve host {hostname!r}: {exc}") from exc
 
     if not addresses:
-        raise SafetyError(f"Remote URL host {hostname!r} resolved to no addresses")
+        raise SafetyError(f"Host {hostname!r} resolved to no addresses")
 
     for address in addresses:
         if any(
@@ -110,8 +123,25 @@ def validate_remote_url(url: str) -> str:
                 address.is_unspecified,
             ]
         ):
-            raise SafetyError(f"Refusing remote URL host {hostname!r}; resolved to unsafe address {address}")
+            raise SafetyError(f"Refusing host {hostname!r}; resolved to unsafe address {address}")
 
+
+def validate_probe_url(url: str) -> str:
+    """Validate a URL the unauthenticated site audit is about to probe.
+
+    Unlike validate_remote_url this permits http://, because detecting whether
+    a site redirects to HTTPS is one of the audit's own checks. It still
+    refuses any host that resolves to a private, loopback, link-local,
+    multicast, reserved or unspecified address, so the audit cannot be pointed
+    at internal infrastructure.
+    """
+
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise SafetyError("Audit URLs must use http:// or https://")
+    if not parsed.hostname:
+        raise SafetyError("Audit URL must include a hostname")
+    _assert_public_host(parsed.hostname)
     return url
 
 
@@ -139,6 +169,61 @@ def fetch_https_media(url: str, *, timeout: int = 20, max_bytes: int = DEFAULT_M
     response = urllib.request.urlopen(request, timeout=timeout)
     body = read_limited_response(response, max_bytes=max_bytes)
     return response, body
+
+
+class _AuthStrippingRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Drop the Authorization header when a redirect leaves the origin.
+
+    CPython's HTTPRedirectHandler copies every header except content-length
+    and content-type onto the redirected request, so a WordPress site (or
+    anything in front of it) answering 30x with a Location on another host
+    receives the Basic-Auth application password verbatim. requests strips it;
+    urllib does not. Same-origin redirects keep the header so ordinary
+    WordPress behaviour (trailing slashes, canonical URLs) still works.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is None:
+            return None
+        if not same_origin(req.full_url, new.full_url):
+            for name in list(new.headers):
+                if name.lower() == "authorization":
+                    del new.headers[name]
+            # Request stores headers capitalized; unredirected_hdrs too.
+            for name in list(getattr(new, "unredirected_hdrs", {})):
+                if name.lower() == "authorization":
+                    del new.unredirected_hdrs[name]
+        return new
+
+
+def same_origin(first: str, second: str) -> bool:
+    """True when two URLs share scheme, host and effective port."""
+
+    a, b = urllib.parse.urlparse(first), urllib.parse.urlparse(second)
+    default = {"http": 80, "https": 443}
+    return (
+        a.scheme == b.scheme
+        and (a.hostname or "").lower() == (b.hostname or "").lower()
+        and (a.port or default.get(a.scheme)) == (b.port or default.get(b.scheme))
+    )
+
+
+_AUTH_SAFE_OPENER = urllib.request.build_opener(_AuthStrippingRedirectHandler)
+
+
+def urlopen_authenticated(req, timeout=None):
+    """urlopen for requests that carry credentials.
+
+    Identical to urllib.request.urlopen except that a redirect crossing the
+    origin loses the Authorization header. Every authenticated call in this
+    skill goes through here; a bare urlopen with an Authorization header is a
+    credential-forwarding bug.
+    """
+
+    if timeout is None:
+        return _AUTH_SAFE_OPENER.open(req)
+    return _AUTH_SAFE_OPENER.open(req, timeout=timeout)
 
 
 def warn_insecure_wp_url(url, env=None):
