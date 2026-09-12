@@ -679,5 +679,82 @@ class AuditBodyLimitTest(unittest.TestCase):
         self.assertEqual(len(capped), sa.MAX_BODY_BYTES)
 
 
+class ProxyBypassTest(unittest.TestCase):
+    """urllib's default ProxyHandler rewrites the connection host to the proxy
+    before the pinned handlers run, so the pin validated and dialled the PROXY
+    while the real target travelled on in the absolute request URI - and the
+    proxy resolved that target itself, with none of these rules applied. The
+    pin was enforcing the address of the wrong host (Codex, PR #20)."""
+
+    def _server(self, tag, body):
+        import threading
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+
+        hits = []
+
+        class H(BaseHTTPRequestHandler):
+            def do_GET(self):
+                hits.append(self.path)
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(body)
+            def log_message(self, *a):
+                pass
+
+        srv = HTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.shutdown)
+        return srv.server_address[1], hits
+
+    def test_a_configured_proxy_is_ignored_by_default(self):
+        from unittest import mock as _mock
+        pport, proxy_hits = self._server("proxy", b"from-proxy")
+        tport, target_hits = self._server("target", b"from-target")
+        env = {"HTTP_PROXY": f"http://127.0.0.1:{pport}"}
+        with _mock.patch.object(security, "_assert_public_host", return_value=["127.0.0.1"]):
+            opener = security._address_enforcing_opener(security.validate_probe_url, env=env)
+            body = opener.open(f"http://127.0.0.1:{tport}/x", timeout=5).read()
+        self.assertEqual(body, b"from-target")
+        self.assertEqual(proxy_hits, [])
+        self.assertEqual(len(target_hits), 1)
+
+    def test_wp_allow_proxy_restores_it_and_warns(self):
+        """urllib reads the proxy from the real environment (getproxies), so the
+        opt-in has to be exercised against os.environ, not just the env mapping
+        this function is handed."""
+        import io, contextlib
+        from unittest import mock as _mock
+        pport, proxy_hits = self._server("proxy", b"from-proxy")
+        tport, _ = self._server("target", b"from-target")
+        env = {"HTTP_PROXY": f"http://127.0.0.1:{pport}", "WP_ALLOW_PROXY": "1"}
+        buf = io.StringIO()
+        with _mock.patch.dict(os.environ, env, clear=False):
+            with _mock.patch.object(security, "_assert_public_host", return_value=["127.0.0.1"]):
+                with contextlib.redirect_stderr(buf):
+                    opener = security._address_enforcing_opener(security.validate_probe_url, env=env)
+                body = opener.open(f"http://127.0.0.1:{tport}/x", timeout=5).read()
+        self.assertEqual(body, b"from-proxy")
+        self.assertEqual(len(proxy_hits), 1)
+        self.assertIn("not enforced end to end", buf.getvalue())
+
+    def test_the_default_opener_registers_no_proxy_handler(self):
+        """Passing an empty ProxyHandler is what stops build_opener installing the
+        default one; an empty handler registers no proxy_open methods, so the
+        absence of any ProxyHandler here IS the mechanism."""
+        names = [type(h).__name__ for h in
+                 security._address_enforcing_opener(security.validate_probe_url, env={}).handlers]
+        self.assertNotIn("ProxyHandler", names)
+        self.assertIn("_PinnedHTTPHandler", names)
+        self.assertIn("_PinnedHTTPSHandler", names)
+
+    def test_no_warning_when_allowed_but_no_proxy_is_configured(self):
+        import io, contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            security._address_enforcing_opener(security.validate_probe_url,
+                                               env={"WP_ALLOW_PROXY": "1"})
+        self.assertEqual(buf.getvalue(), "")
+
+
 if __name__ == "__main__":
     unittest.main()

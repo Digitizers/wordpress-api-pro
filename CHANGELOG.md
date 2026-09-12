@@ -15,6 +15,15 @@ and ClawScan independently.
   and the TLS expiry check - DIALS one of them instead of re-resolving.
   Certificate validation and SNI still use the hostname, so pinning the address
   changes which endpoint is reached and nothing about how it is verified.
+- **A configured proxy no longer defeats the pin.** urllib's default
+  `ProxyHandler` rewrites the connection host to the proxy before the pinned
+  handlers run, so the pin validated and dialled the PROXY while the real target
+  travelled on in the absolute request URI (http) or CONNECT (https) - and the
+  proxy resolved that target itself, with none of these rules applied. A private
+  enterprise proxy was also refused outright as an unsafe address. The enforcing
+  openers now disable proxies; `WP_ALLOW_PROXY=1` restores them for an
+  environment where the proxy is the only egress, with a warning that address
+  enforcement is no longer end to end.
 - **Response bodies are bounded.** `site_audit` read both the success and the
   HTTP-error body with a bare `read()`, so any server it visited decided how
   much memory this process used. Both are capped at `MAX_BODY_BYTES` (5 MB); the

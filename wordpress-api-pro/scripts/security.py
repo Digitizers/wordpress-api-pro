@@ -272,11 +272,39 @@ class _PinnedHTTPSHandler(urllib.request.HTTPSHandler):
         return self.do_open(_PinnedHTTPSConnection, req, context=self._context)
 
 
-def _address_enforcing_opener(validator):
-    """An opener that holds every hop AND every connection to `validator`."""
+PROXY_ENV_VARS = ("http_proxy", "https_proxy", "all_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY")
 
-    return urllib.request.build_opener(
-        _PinnedHTTPHandler(), _PinnedHTTPSHandler(), _ValidatingRedirectHandler(validator))
+
+def _address_enforcing_opener(validator, env=None):
+    """An opener that holds every hop AND every connection to `validator`.
+
+    Proxies are disabled here, and that is load-bearing rather than tidiness.
+    urllib's default ProxyHandler rewrites the connection host to the proxy
+    before these handlers run, so the pinned connection would validate and dial
+    the PROXY while the real target travelled on in the absolute request URI
+    (http) or in CONNECT (https) - and the proxy would resolve that target
+    itself, with none of these rules applied. The pin would be enforcing the
+    address of the wrong host. A private enterprise proxy would also be refused
+    outright as an unsafe address, which is a confusing way to fail.
+
+    WP_ALLOW_PROXY=1 restores proxy use for an environment where the proxy is
+    the only egress, at the cost of end-to-end address enforcement: from there
+    the proxy decides what it connects to.
+    """
+
+    env = env if env is not None else os.environ
+    handlers = [_PinnedHTTPHandler(), _PinnedHTTPSHandler(), _ValidatingRedirectHandler(validator)]
+    if env.get("WP_ALLOW_PROXY") == "1":
+        if any(env.get(name) for name in PROXY_ENV_VARS):
+            print(
+                "SECURITY WARNING: WP_ALLOW_PROXY=1 and a proxy is configured - "
+                "the proxy resolves and connects to the target, so this skill's "
+                "address rules are not enforced end to end.",
+                file=sys.stderr,
+            )
+    else:
+        handlers.insert(0, urllib.request.ProxyHandler({}))
+    return urllib.request.build_opener(*handlers)
 
 
 _PROBE_OPENER = _address_enforcing_opener(validate_probe_url)
