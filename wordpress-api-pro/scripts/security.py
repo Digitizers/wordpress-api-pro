@@ -289,14 +289,25 @@ def _address_enforcing_opener(validator, env=None):
 
     WP_ALLOW_PROXY=1 restores proxy use for an environment where the proxy is
     the only egress, at the cost of end-to-end address enforcement: from there
-    the proxy decides what it connects to.
+    the proxy decides what it connects to. That mode also drops the pinned
+    connection classes, because they would refuse the proxy itself - an
+    enterprise proxy is normally on a private address, which is exactly the
+    kind of address they exist to reject. Pinning a connection whose host has
+    been rewritten to the proxy enforces nothing anyway: it would check the
+    address of the proxy while the real target rides along in the request.
+    URL-level validation stays in both modes, for the initial URL and every
+    redirect target.
     """
 
     env = env if env is not None else os.environ
-    handlers = [_PinnedHTTPHandler(), _PinnedHTTPSHandler(), _ValidatingRedirectHandler(validator)]
-    if env.get("WP_ALLOW_PROXY") != "1":
-        handlers.insert(0, urllib.request.ProxyHandler({}))
-    return urllib.request.build_opener(*handlers)
+    if env.get("WP_ALLOW_PROXY") == "1":
+        return urllib.request.build_opener(_ValidatingRedirectHandler(validator))
+    return urllib.request.build_opener(
+        urllib.request.ProxyHandler({}),
+        _PinnedHTTPHandler(),
+        _PinnedHTTPSHandler(),
+        _ValidatingRedirectHandler(validator),
+    )
 
 
 _proxy_warning_emitted = False

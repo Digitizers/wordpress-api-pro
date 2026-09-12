@@ -23,9 +23,13 @@ and ClawScan independently.
   enterprise proxy was also refused outright as an unsafe address. The enforcing
   openers now disable proxies; `WP_ALLOW_PROXY=1` restores them for an
   environment where the proxy is the only egress, with a warning that address
-  enforcement is no longer end to end. The warning belongs to the fetch, not to
-  the import: it fires once, from the audit and media paths that claim the
-  enforcement, rather than twice from every CLI that merely imports the module.
+  enforcement is no longer end to end. That mode also drops the pinned
+  connection classes: an enterprise proxy normally sits on a private address,
+  which is exactly what they reject, so keeping them would have made the escape
+  hatch fail for the only case it exists for. URL-level validation stays in both
+  modes. The warning belongs to the fetch, not to the import: it fires once,
+  from the audit and media paths that claim the enforcement, rather than twice
+  from every CLI that merely imports the module.
 - **Response bodies are bounded.** `site_audit` read both the success and the
   HTTP-error body with a bare `read()`, so any server it visited decided how
   much memory this process used. Both are capped at `MAX_BODY_BYTES` (5 MB); the

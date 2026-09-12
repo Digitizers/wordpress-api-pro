@@ -727,12 +727,45 @@ class ProxyBypassTest(unittest.TestCase):
         from unittest import mock as _mock
         pport, proxy_hits = self._server("proxy", b"from-proxy")
         tport, _ = self._server("target", b"from-target")
-        env = {"HTTP_PROXY": f"http://127.0.0.1:{pport}", "WP_ALLOW_PROXY": "1",
-               "no_proxy": "", "NO_PROXY": ""}
+        # Clear EVERY proxy variable before setting ours: urllib prefers the
+        # lowercase http_proxy over the uppercase one, and no_proxy exempting
+        # 127.0.0.1 would bypass the local proxy - either would make this test
+        # pass for the wrong reason on a developer's machine or in CI.
+        env = {name: "" for name in security.PROXY_ENV_VARS}
+        env.update({"no_proxy": "", "NO_PROXY": "", "WP_ALLOW_PROXY": "1",
+                    "http_proxy": f"http://127.0.0.1:{pport}",
+                    "HTTP_PROXY": f"http://127.0.0.1:{pport}"})
         with _mock.patch.dict(os.environ, env, clear=False):
             with _mock.patch.object(security, "_assert_public_host", return_value=["127.0.0.1"]):
                 opener = security._address_enforcing_opener(security.validate_probe_url, env=env)
                 body = opener.open(f"http://127.0.0.1:{tport}/x", timeout=5).read()
+        self.assertEqual(body, b"from-proxy")
+        self.assertEqual(len(proxy_hits), 1)
+
+    def test_the_opt_in_does_not_pin_the_proxy_itself(self):
+        """An enterprise proxy is normally on a private address - the exact kind
+        the pinned classes reject - so leaving them in place made the documented
+        escape hatch fail for the only case it exists for (Codex, PR #20)."""
+        names = [type(h).__name__ for h in
+                 security._address_enforcing_opener(
+                     security.validate_probe_url, env={"WP_ALLOW_PROXY": "1"}).handlers]
+        self.assertNotIn("_PinnedHTTPConnection", names)
+        self.assertNotIn("_PinnedHTTPHandler", names)
+        self.assertNotIn("_PinnedHTTPSHandler", names)
+        self.assertIn("_ValidatingRedirectHandler", names)
+
+    def test_a_private_proxy_is_reachable_under_the_opt_in(self):
+        """127.0.0.1 stands in for the private address a real proxy sits on."""
+        from unittest import mock as _mock
+        pport, proxy_hits = self._server("proxy", b"from-proxy")
+        tport, _ = self._server("target", b"from-target")
+        env = {name: "" for name in security.PROXY_ENV_VARS}
+        env.update({"no_proxy": "", "NO_PROXY": "", "WP_ALLOW_PROXY": "1",
+                    "http_proxy": f"http://127.0.0.1:{pport}",
+                    "HTTP_PROXY": f"http://127.0.0.1:{pport}"})
+        with _mock.patch.dict(os.environ, env, clear=False):
+            opener = security._address_enforcing_opener(security.validate_probe_url, env=env)
+            body = opener.open(f"http://93.184.216.34/x", timeout=5).read()
         self.assertEqual(body, b"from-proxy")
         self.assertEqual(len(proxy_hits), 1)
 

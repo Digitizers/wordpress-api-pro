@@ -14,7 +14,7 @@ permissions:
     - "WP_CONFIG (optional sites.json path), WP_ALLOWED_FILE_ROOTS (file-read scope)"
     - "WP_ALLOW_REMOTE_URLS, WP_REQUIRE_HTTPS, WP_REQUIRE_ALLOWLIST, PAGESPEED_API_KEY"
     - "WP_ALLOW_HTTP, WP_ALLOW_RAW_META (escape hatches for the 3.9.0 defaults)"
-    - "WP_ALLOW_PROXY (use a configured HTTP(S) proxy for audit/media fetches; off by default because the proxy, not this skill, then decides what it connects to)"
+    - "WP_ALLOW_PROXY (use a configured HTTP(S) proxy for audit/media fetches; off by default because the proxy, not this skill, then decides what it connects to — with it on, URLs and redirect targets are still validated but addresses are not)"
   network:
     - "Outbound HTTPS to the configured WordPress site(s) /wp-json/ REST API — plaintext http:// to a non-local host is refused unless WP_ALLOW_HTTP=1"
     - "https://www.googleapis.com/pagespeedonline (site_audit only)"
