@@ -284,16 +284,25 @@ class NoBareAuthenticatedUrlopenTest(unittest.TestCase):
     it through urlopen_authenticated; a bare urllib.request.urlopen there is
     the redirect credential leak this release fixed."""
 
-    def test_no_authenticated_script_calls_urlopen_directly(self):
-        offenders = []
+    def _authenticated_scripts(self):
         for name in sorted(os.listdir(SCRIPTS)):
             if not name.endswith(".py") or name == "security.py":
                 continue
             source = open(os.path.join(SCRIPTS, name), encoding="utf-8").read()
-            if "Authorization" not in source:
-                continue
-            if "urllib.request.urlopen(" in source:
-                offenders.append(name)
+            if "Authorization" in source:
+                yield name, source
+
+    def test_every_authenticated_cli_checks_the_url_scheme(self):
+        """describe_cpt sent Basic credentials over plaintext http:// because its
+        main() never called the guard, so the 3.9.0 default did not apply to it
+        (Codex, PR #17). Nothing else may be added with that shape."""
+        offenders = [name for name, source in self._authenticated_scripts()
+                     if "require_secure_wp_url(" not in source]
+        self.assertEqual(offenders, [])
+
+    def test_no_authenticated_script_calls_urlopen_directly(self):
+        offenders = [name for name, source in self._authenticated_scripts()
+                     if "urllib.request.urlopen(" in source]
         self.assertEqual(offenders, [])
 
 

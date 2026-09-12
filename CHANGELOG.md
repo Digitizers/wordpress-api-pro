@@ -26,6 +26,9 @@ Fixed:
   detecting a missing HTTPS redirect is one of the audit's own checks.
 - `seed_content` read its `--dataset` with a bare `open()`; it now goes through
   `validate_local_file` with the 2 MB text ceiling, like every other local read.
+- `describe_cpt` sent Basic credentials without ever checking the URL scheme —
+  its `main()` was the one authenticated CLI that never called the guard, so the
+  plaintext-http rule below did not apply to it.
 - `seo_meta` reported failure as `{"error": ...}` and still exited 0, which CI
   and an agent both read as success. Both result paths exit 1 on an error.
 - `jetengine_fields --list-all` was declared but never read, so passing it
