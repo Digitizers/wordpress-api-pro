@@ -27,7 +27,7 @@ import os
 import sys
 import requests
 from base64 import b64encode
-from security import exit_on_error_result, require_secure_wp_url
+from security import error_result, exit_on_error_result, require_secure_wp_url
 
 def get_acf_fields(url, username, password, post_id, field_name=None):
     """Get ACF fields via REST API (with postmeta fallback)"""
@@ -72,9 +72,9 @@ def get_acf_fields(url, username, password, post_id, field_name=None):
             return acf_fields
         else:
             error_data = response.json() if response.headers.get('content-type', '').startswith('application/json') else {}
-            return {"error": f"HTTP {response.status_code}", "details": error_data}
+            return error_result(f"HTTP {response.status_code}", details=error_data)
     except requests.exceptions.RequestException as e:
-        return {"error": str(e)}
+        return error_result(str(e))
 
 def set_acf_fields(url, username, password, post_id, fields_dict, rest_base="posts"):
     """Set ACF fields via REST API (with postmeta fallback).
@@ -113,9 +113,9 @@ def set_acf_fields(url, username, password, post_id, fields_dict, rest_base="pos
             return response.json()
         else:
             error_data = response.json() if response.headers.get('content-type', '').startswith('application/json') else {}
-            return {"error": f"HTTP {response.status_code}", "details": error_data}
+            return error_result(f"HTTP {response.status_code}", details=error_data)
     except requests.exceptions.RequestException as e:
-        return {"error": str(e)}
+        return error_result(str(e))
 
 def main():
     parser = argparse.ArgumentParser(description='Read/write ACF fields')

@@ -27,7 +27,7 @@ import json
 import os
 import sys
 from base64 import b64encode
-from security import exit_on_error_result, require_secure_wp_url
+from security import error_result, exit_on_error_result, require_secure_wp_url
 
 # Meta key mappings
 RANKMATH_KEYS = {
@@ -125,9 +125,9 @@ def get_seo_meta(url, username, password, post_id, plugin=None):
             return result
         else:
             error_data = response.json() if response.headers.get('content-type', '').startswith('application/json') else {}
-            return {"error": f"HTTP {response.status_code}", "details": error_data}
+            return error_result(f"HTTP {response.status_code}", details=error_data)
     except requests.exceptions.RequestException as e:
-        return {"error": str(e)}
+        return error_result(str(e))
 
 def _map_meta_keys(meta_dict, plugin, env=None):
     """Map friendly SEO key names to actual postmeta keys.
@@ -191,7 +191,7 @@ def set_seo_meta(url, username, password, post_id, meta_dict, plugin='rankmath')
     try:
         meta_payload, raw_warnings = _map_meta_keys(meta_dict, plugin)
     except ValueError as exc:
-        return {"error": str(exc)}
+        return error_result(str(exc))
 
     for _key, msg in raw_warnings:
         print("WARNING: " + msg, file=sys.stderr)
@@ -204,9 +204,9 @@ def set_seo_meta(url, username, password, post_id, meta_dict, plugin='rankmath')
             return response.json()
         else:
             error_data = response.json() if response.headers.get('content-type', '').startswith('application/json') else {}
-            return {"error": f"HTTP {response.status_code}", "details": error_data}
+            return error_result(f"HTTP {response.status_code}", details=error_data)
     except requests.exceptions.RequestException as e:
-        return {"error": str(e)}
+        return error_result(str(e))
 
 def main():
     parser = argparse.ArgumentParser(description='Read/write SEO meta (Rank Math + Yoast)')

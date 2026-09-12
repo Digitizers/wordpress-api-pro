@@ -466,26 +466,47 @@ class ErrorResultExitTest(unittest.TestCase):
 
     def test_an_error_result_exits_one(self):
         with self.assertRaises(SystemExit) as caught:
-            security.exit_on_error_result({"error": "HTTP 403", "details": {}})
+            security.exit_on_error_result(security.error_result("HTTP 403", details={}))
         self.assertEqual(caught.exception.code, 1)
 
     def test_a_successful_result_does_not_exit(self):
         self.assertIsNone(security.exit_on_error_result({"id": 12, "status": "draft"}))
 
-    def test_an_empty_error_value_is_not_a_failure(self):
-        """Only a truthy error counts - an "error": "" field is not a failure."""
-        self.assertIsNone(security.exit_on_error_result({"error": ""}))
+    def test_a_site_field_named_error_is_data_not_a_failure(self):
+        """The ACF and JetEngine getters return the SITE's own field dictionary,
+        so a custom field named "error" - or an explicit --field error lookup -
+        is ordinary data. Key presence cannot identify a failure (Codex, PR #18)."""
+        self.assertIsNone(security.exit_on_error_result({"error": "yes, a real field value"}))
+        self.assertIsNone(security.exit_on_error_result({"error": {"nested": True}}))
 
     def test_a_non_dict_result_is_ignored(self):
         self.assertIsNone(security.exit_on_error_result(["a", "list"]))
 
-    def test_every_script_returning_an_error_dict_checks_it(self):
+    def test_the_envelope_serialises_like_a_plain_dict(self):
+        """It is a dict subclass so the CLI's JSON output is unchanged."""
+        import json as _json
+        self.assertEqual(_json.loads(_json.dumps(security.error_result("boom", details={"a": 1}))),
+                         {"error": "boom", "details": {"a": 1}})
+
+    def test_no_script_builds_a_bare_error_dict(self):
+        """A bare {"error": ...} return is indistinguishable from site data;
+        failures go through error_result so the type carries the meaning."""
         offenders = []
         for name in sorted(os.listdir(SCRIPTS)):
             if not name.endswith(".py") or name == "security.py":
                 continue
             source = open(os.path.join(SCRIPTS, name), encoding="utf-8").read()
-            if 'return {"error"' not in source:
+            if 'return {"error"' in source:
+                offenders.append(name)
+        self.assertEqual(offenders, [])
+
+    def test_every_script_returning_a_failure_checks_it(self):
+        offenders = []
+        for name in sorted(os.listdir(SCRIPTS)):
+            if not name.endswith(".py") or name == "security.py":
+                continue
+            source = open(os.path.join(SCRIPTS, name), encoding="utf-8").read()
+            if "error_result(" not in source:
                 continue
             if "exit_on_error_result(" not in source:
                 offenders.append(name)

@@ -6,7 +6,12 @@
   0 on a failed write, so CI and an agent both read a failure as success. 3.9.0
   fixed this in `seo_meta` only; the other two carried the same shape. The check
   is now one shared `security.exit_on_error_result`, with a static test that
-  fails if a script returning an error dict does not call it.
+  fails if a script returning a failure does not call it. Failure is carried by
+  a TYPE (`security.ErrorResult`, built by `error_result()`), not by the presence
+  of an `"error"` key: the ACF and JetEngine getters return the site's own field
+  dictionary, so a custom field named `error` - or an explicit `--field error`
+  lookup - is ordinary data and must not read as a failed call. The envelope is
+  a `dict` subclass, so the JSON output is byte-identical.
 - No behaviour change for a successful call, and the JSON still goes to stdout -
   only the exit code differs.
 
