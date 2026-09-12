@@ -262,6 +262,17 @@ class ProbeRedirectTest(unittest.TestCase):
         self.assertEqual(self._redirect("https://93.184.216.34/x").full_url,
                          "https://93.184.216.34/x")
 
+    def test_an_unresolvable_name_is_not_reported_as_a_refusal(self):
+        """A typo'd domain is unreachable, not an attempt to reach internal
+        infrastructure - site_audit has to keep reporting it as a site that did
+        not respond, so it gets its own SafetyError subclass."""
+        import socket as _socket
+        from unittest import mock as _mock
+        with _mock.patch.object(security, "_hostname_addresses",
+                                side_effect=_socket.gaierror("nodename nor servname provided")):
+            with self.assertRaises(security.HostResolutionError):
+                validate_probe_url("https://nonexistent.invalid/")
+
     def test_urlopen_probe_validates_before_opening(self):
         """No socket is created: the refusal happens before the opener runs."""
         with self.assertRaises(SafetyError):
@@ -319,3 +330,26 @@ class DatasetPathTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AuditUnreachableVsRefusedTest(unittest.TestCase):
+    """audit() must keep its two outcomes distinct: a site that did not respond,
+    and an address the safety rule refused."""
+
+    def _audit(self, error):
+        from unittest import mock as _mock
+        import site_audit as sa
+        with _mock.patch.object(sa, "_get", side_effect=error):
+            return sa.audit("https://example.com")
+
+    def test_unresolvable_host_reports_unreachable(self):
+        result = self._audit(security.HostResolutionError("Could not resolve host"))
+        self.assertFalse(result["reachable"])
+        checks = [f["check"] for f in result["findings"]]
+        self.assertIn("reachable", checks)
+        self.assertNotIn("blocked", checks)
+
+    def test_refused_address_reports_blocked(self):
+        result = self._audit(SafetyError("Refusing host; resolved to unsafe address"))
+        self.assertFalse(result["reachable"])
+        self.assertEqual([f["check"] for f in result["findings"]], ["blocked"])

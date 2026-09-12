@@ -33,6 +33,10 @@ Fixed:
   (underscore-prefixed) meta as documented.
 - `references/gutenberg-blocks.md`: the table block example closed with
   `<!-- /wp:heading -->`.
+- A hostname that does not resolve raises `HostResolutionError` (a `SafetyError`
+  subclass) rather than a bare `SafetyError`, so the address validation above did
+  not turn a typo'd domain into "refused by the address safety rule". `site_audit`
+  still reports it as a site that did not respond, with its JSON intact.
 
 Changed (breaking):
 

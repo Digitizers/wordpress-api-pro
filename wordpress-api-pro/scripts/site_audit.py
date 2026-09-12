@@ -12,7 +12,10 @@ Env (optional): PAGESPEED_API_KEY  (higher PageSpeed Insights quota)
 import argparse, json, os, re, ssl, socket, sys, urllib.request, urllib.parse, urllib.error
 from datetime import datetime, timezone
 
-from security import SafetyError, die_safety, urlopen_probe, validate_probe_host, validate_probe_url
+from security import (
+    HostResolutionError, SafetyError, die_safety, urlopen_probe, validate_probe_host,
+    validate_probe_url,
+)
 
 UA = "Mozilla/5.0 (compatible; DigitizerAudit/1.0)"
 SECURITY_HEADERS = [
@@ -136,6 +139,10 @@ def audit(url, api_key=None):
 
     try:
         code, headers, final_url, html = _get(url)
+    except HostResolutionError as e:
+        # A name that does not resolve is an unreachable site, not a refusal.
+        add("reach", "reachable", str(e), "fail", "site did not respond")
+        return {"url": url, "reachable": False, "findings": findings}
     except SafetyError as e:
         add("reach", "blocked", str(e), "fail", "refused by the address safety rule")
         return {"url": url, "reachable": False, "findings": findings}
@@ -214,6 +221,10 @@ def main():
         url = "https://" + url
     try:
         validate_probe_url(url)
+    except HostResolutionError:
+        # Let audit() run and report it as unreachable in its JSON, the way it
+        # did before this URL was validated up front.
+        pass
     except SafetyError as e:
         die_safety(e)
     result = audit(url, api_key=os.getenv("PAGESPEED_API_KEY"))

@@ -24,6 +24,16 @@ class SafetyError(ValueError):
     """Raised when an input crosses the skill's safety boundaries."""
 
 
+class HostResolutionError(SafetyError):
+    """A hostname could not be resolved at all.
+
+    Unreachable, not unsafe - a typo'd domain is not an attempt to reach
+    internal infrastructure, and the site audit has to keep reporting it as a
+    site that did not respond. Subclasses SafetyError so callers that only
+    care about "this was refused" (the media and file paths) are unchanged.
+    """
+
+
 def _split_roots(raw: str | None) -> list[Path]:
     if not raw:
         return [Path.cwd().resolve()]
@@ -107,7 +117,7 @@ def _assert_public_host(hostname: str) -> None:
     try:
         addresses = list(_hostname_addresses(hostname))
     except socket.gaierror as exc:
-        raise SafetyError(f"Could not resolve host {hostname!r}: {exc}") from exc
+        raise HostResolutionError(f"Could not resolve host {hostname!r}: {exc}") from exc
 
     if not addresses:
         raise SafetyError(f"Host {hostname!r} resolved to no addresses")
