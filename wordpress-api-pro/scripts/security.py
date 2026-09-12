@@ -373,6 +373,19 @@ def should_confirm_publish(status, assume_yes, is_tty):
     return status == "publish" and not assume_yes and bool(is_tty)
 
 
+def exit_on_error_result(result) -> None:
+    """Exit 1 when a helper reported failure as {"error": ...} instead of raising.
+
+    Several scripts return an error dict rather than raising, so without this
+    the CLI printed the error and still exited 0 - which CI and an agent both
+    read as success. Call it after printing the result, so the JSON is still
+    on stdout for whoever wants to parse it.
+    """
+
+    if isinstance(result, dict) and result.get("error"):
+        sys.exit(1)
+
+
 def die_safety(error: Exception) -> None:
     print(f"Safety error: {error}", file=sys.stderr)
     sys.exit(2)
