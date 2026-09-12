@@ -198,14 +198,16 @@ def audit(url, api_key=None):
 
 def _summary(result):
     lines = [f"# Quick audit — {result['url']}", ""]
-    if not result["reachable"]:
-        return "\n".join(lines + ["Site unreachable."])
     order = {"fail": 0, "warn": 1, "skipped": 2, "pass": 3}
     icon = {"pass": "🟢", "warn": "🟡", "fail": "🔴", "skipped": "⚪"}
+    rendered = []
     for f in sorted(result["findings"], key=lambda x: order.get(x["status"], 9)):
         note = f" — {f['note']}" if f["note"] else ""
-        lines.append(f"{icon.get(f['status'],'')} [{f['group']}] {f['check']}: {f['value']}{note}")
-    return "\n".join(lines)
+        rendered.append(f"{icon.get(f['status'],'')} [{f['group']}] {f['check']}: {f['value']}{note}")
+    # An unreachable result still carries a finding, and a refused address is not
+    # a connectivity failure: printing a flat "Site unreachable." for both would
+    # hide which address was blocked and why.
+    return "\n".join(lines + (rendered or ["Site unreachable."]))
 
 
 def main():

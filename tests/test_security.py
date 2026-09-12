@@ -428,3 +428,31 @@ class BatchPreflightTest(unittest.TestCase):
         preflight = source.index("require_secure_wp_urls(")
         loop = source.index("for site_name in site_data:")
         self.assertLess(preflight, loop)
+
+
+class AuditSummaryTest(unittest.TestCase):
+    """--summary discarded every finding when reachable was false, so a refused
+    address was reported as a flat "Site unreachable." - a deliberate safety
+    refusal misreported as a connectivity failure, with the address hidden
+    (Codex, PR #17)."""
+
+    def _summary(self, error):
+        from unittest import mock as _mock
+        import site_audit as sa
+        with _mock.patch.object(sa, "_get", side_effect=error):
+            return sa._summary(sa.audit("https://example.com"))
+
+    def test_a_blocked_address_is_named_in_the_summary(self):
+        text = self._summary(SafetyError("Refusing host; resolved to unsafe address 10.0.0.5"))
+        self.assertIn("blocked", text)
+        self.assertIn("10.0.0.5", text)
+        self.assertNotIn("Site unreachable.", text)
+
+    def test_an_unresolvable_host_still_reads_as_unreachable(self):
+        text = self._summary(security.HostResolutionError("Could not resolve host 'nope.invalid'"))
+        self.assertIn("site did not respond", text)
+
+    def test_a_result_with_no_findings_keeps_the_old_line(self):
+        import site_audit as sa
+        self.assertIn("Site unreachable.",
+                      sa._summary({"url": "https://x.example", "reachable": False, "findings": []}))

@@ -30,6 +30,11 @@ Fixed:
   detecting a missing HTTPS redirect is one of the audit's own checks.
 - `seed_content` read its `--dataset` with a bare `open()`; it now goes through
   `validate_local_file` with the 2 MB text ceiling, like every other local read.
+- `site_audit --summary` discarded every finding when the site was unreachable
+  and printed a flat "Site unreachable.", which reported a refused address as a
+  connectivity failure and hid which address was blocked. The summary now renders
+  whatever the audit recorded, falling back to that line only when there is
+  nothing to show.
 - The multi-site runners check **every** selected site before the first write.
   Refusing http:// inside the loop would abort a batch partway - earlier sites
   modified, later ones untouched, no summary - so `batch_update` and `wp_cli`
