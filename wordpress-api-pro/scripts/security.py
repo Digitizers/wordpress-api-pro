@@ -373,6 +373,36 @@ def should_confirm_publish(status, assume_yes, is_tty):
     return status == "publish" and not assume_yes and bool(is_tty)
 
 
+class ErrorResult(dict):
+    """A helper's failure envelope.
+
+    Still a dict - it serialises identically and callers can index it - but a
+    distinct TYPE, because key presence cannot identify a failure here. The ACF
+    and JetEngine getters return the SITE's own field dictionary, so a custom
+    field named "error" (or an explicit --field error lookup) is ordinary data
+    that must not be mistaken for a failed call.
+    """
+
+
+def error_result(message, **extra) -> ErrorResult:
+    """Build the failure envelope every helper returns instead of raising."""
+
+    return ErrorResult({"error": message, **extra})
+
+
+def exit_on_error_result(result) -> None:
+    """Exit 1 when a helper returned an ErrorResult instead of raising.
+
+    Several scripts report failure by returning rather than raising, so without
+    this the CLI printed the error and still exited 0 - which CI and an agent
+    both read as success. Call it after printing the result, so the JSON is
+    still on stdout for whoever wants to parse it.
+    """
+
+    if isinstance(result, ErrorResult):
+        sys.exit(1)
+
+
 def die_safety(error: Exception) -> None:
     print(f"Safety error: {error}", file=sys.stderr)
     sys.exit(2)

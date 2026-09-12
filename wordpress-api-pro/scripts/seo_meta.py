@@ -27,7 +27,7 @@ import json
 import os
 import sys
 from base64 import b64encode
-from security import require_secure_wp_url
+from security import error_result, exit_on_error_result, require_secure_wp_url
 
 # Meta key mappings
 RANKMATH_KEYS = {
@@ -125,9 +125,9 @@ def get_seo_meta(url, username, password, post_id, plugin=None):
             return result
         else:
             error_data = response.json() if response.headers.get('content-type', '').startswith('application/json') else {}
-            return {"error": f"HTTP {response.status_code}", "details": error_data}
+            return error_result(f"HTTP {response.status_code}", details=error_data)
     except requests.exceptions.RequestException as e:
-        return {"error": str(e)}
+        return error_result(str(e))
 
 def _map_meta_keys(meta_dict, plugin, env=None):
     """Map friendly SEO key names to actual postmeta keys.
@@ -191,7 +191,7 @@ def set_seo_meta(url, username, password, post_id, meta_dict, plugin='rankmath')
     try:
         meta_payload, raw_warnings = _map_meta_keys(meta_dict, plugin)
     except ValueError as exc:
-        return {"error": str(exc)}
+        return error_result(str(exc))
 
     for _key, msg in raw_warnings:
         print("WARNING: " + msg, file=sys.stderr)
@@ -204,17 +204,9 @@ def set_seo_meta(url, username, password, post_id, meta_dict, plugin='rankmath')
             return response.json()
         else:
             error_data = response.json() if response.headers.get('content-type', '').startswith('application/json') else {}
-            return {"error": f"HTTP {response.status_code}", "details": error_data}
+            return error_result(f"HTTP {response.status_code}", details=error_data)
     except requests.exceptions.RequestException as e:
-        return {"error": str(e)}
-
-def _exit_on_error(result):
-    """These helpers report failure as {"error": ...} rather than by raising, so
-    without this a refused write printed its error and still exited 0 - which
-    CI and an agent both read as success."""
-    if isinstance(result, dict) and result.get("error"):
-        sys.exit(1)
-
+        return error_result(str(e))
 
 def main():
     parser = argparse.ArgumentParser(description='Read/write SEO meta (Rank Math + Yoast)')
@@ -267,13 +259,13 @@ def main():
             result = set_seo_meta(args.url, args.username, args.app_password, 
                                  args.post_id, meta, plugin)
             print(json.dumps(result, indent=2))
-            _exit_on_error(result)
+            exit_on_error_result(result)
         # Get operation
         else:
             result = get_seo_meta(args.url, args.username, args.app_password, 
                                  args.post_id, plugin)
             print(json.dumps(result, indent=2))
-            _exit_on_error(result)
+            exit_on_error_result(result)
             
     except json.JSONDecodeError as e:
         print(json.dumps({"error": f"Invalid JSON: {e}"}), file=sys.stderr)
