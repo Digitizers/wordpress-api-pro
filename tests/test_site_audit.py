@@ -80,7 +80,7 @@ class GetHttpErrorTest(unittest.TestCase):
             url="http://example.com/x", code=403, msg="Forbidden",
             hdrs={"Content-Type": "text/html", "Server": "nginx"},
             fp=io.BytesIO(b"<html>denied</html>"))
-        with mock.patch.object(sa.urllib.request, "urlopen", side_effect=err):
+        with mock.patch.object(sa, "urlopen_probe", side_effect=err):
             code, headers, final_url, body = sa._get("http://example.com/x")
         self.assertEqual(code, 403)
         self.assertEqual(final_url, "http://example.com/x")
@@ -90,7 +90,7 @@ class GetHttpErrorTest(unittest.TestCase):
     def test_connection_error_still_propagates(self):
         """DNS/timeout/refused (URLError) must still propagate → audit() marks
         the site unreachable."""
-        with mock.patch.object(sa.urllib.request, "urlopen",
+        with mock.patch.object(sa, "urlopen_probe",
                                side_effect=urllib.error.URLError("name resolution failed")):
             with self.assertRaises(urllib.error.URLError):
                 sa._get("http://nonexistent.invalid")

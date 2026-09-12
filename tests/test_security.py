@@ -1,9 +1,14 @@
 import os, sys, unittest
+import urllib.request
 
 SCRIPTS = os.path.join(os.path.dirname(__file__), "..", "wordpress-api-pro", "scripts")
 sys.path.insert(0, os.path.abspath(SCRIPTS))
 
-from security import SafetyError, warn_insecure_wp_url, should_confirm_publish  # noqa: E402
+import security  # noqa: E402
+from security import (  # noqa: E402
+    SafetyError, same_origin, should_confirm_publish, validate_probe_host,
+    validate_probe_url, validate_remote_url, warn_insecure_wp_url,
+)
 from seo_meta import _map_meta_keys  # noqa: E402
 
 
@@ -127,3 +132,144 @@ class SeoMetaRawKeyTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SameOriginTest(unittest.TestCase):
+    def test_identical_origin(self):
+        self.assertTrue(same_origin("https://site.com/a", "https://site.com/b"))
+
+    def test_explicit_default_port_is_the_same_origin(self):
+        """https://site.com and https://site.com:443 are one origin."""
+        self.assertTrue(same_origin("https://site.com/a", "https://site.com:443/b"))
+
+    def test_host_scheme_and_port_each_break_the_origin(self):
+        self.assertFalse(same_origin("https://site.com/a", "https://evil.com/a"))
+        self.assertFalse(same_origin("https://site.com/a", "http://site.com/a"))
+        self.assertFalse(same_origin("https://site.com/a", "https://site.com:8443/a"))
+
+    def test_host_comparison_is_case_insensitive(self):
+        self.assertTrue(same_origin("https://SITE.com/a", "https://site.COM/b"))
+
+
+class AuthStrippingRedirectTest(unittest.TestCase):
+    """CPython's HTTPRedirectHandler copies every header except
+    content-length/content-type onto the redirected request, so a redirect to
+    another host carries Authorization with it. The handler must drop it."""
+
+    def _redirect(self, from_url, to_url):
+        handler = security._AuthStrippingRedirectHandler()
+        req = urllib.request.Request(from_url, headers={"Authorization": "Basic c2VjcmV0"})
+        return handler.redirect_request(req, None, 302, "Found", None, to_url)
+
+    def test_credentials_are_dropped_when_the_host_changes(self):
+        new = self._redirect("https://site.com/wp-json", "https://evil.com/collect")
+        self.assertIsNone(new.get_header("Authorization"))
+
+    def test_credentials_survive_a_same_origin_redirect(self):
+        """WordPress canonical-URL redirects are same-origin and must keep working."""
+        new = self._redirect("https://site.com/wp-json", "https://site.com/wp-json/")
+        self.assertEqual(new.get_header("Authorization"), "Basic c2VjcmV0")
+
+    def test_credentials_are_dropped_on_an_https_to_http_downgrade(self):
+        new = self._redirect("https://site.com/wp-json", "http://site.com/wp-json")
+        self.assertIsNone(new.get_header("Authorization"))
+
+    def test_header_name_casing_does_not_hide_the_credential(self):
+        handler = security._AuthStrippingRedirectHandler()
+        req = urllib.request.Request("https://site.com/x")
+        req.add_unredirected_header("authorization", "Basic c2VjcmV0")
+        new = handler.redirect_request(req, None, 302, "Found", None, "https://evil.com/y")
+        self.assertNotIn("authorization",
+                         [k.lower() for k in list(new.headers) + list(new.unredirected_hdrs)])
+
+
+class ValidateProbeUrlTest(unittest.TestCase):
+    """The site audit must reach http:// (detecting a missing HTTPS redirect is
+    one of its own checks) without becoming an SSRF primitive. Every case uses
+    an IP literal, so no test resolves a name over the network."""
+
+    def test_http_is_permitted_for_a_public_address(self):
+        self.assertEqual(validate_probe_url("http://93.184.216.34/"), "http://93.184.216.34/")
+
+    def test_loopback_is_refused(self):
+        with self.assertRaises(SafetyError):
+            validate_probe_url("http://127.0.0.1/wp-admin")
+
+    def test_link_local_metadata_address_is_refused(self):
+        with self.assertRaises(SafetyError):
+            validate_probe_url("http://169.254.169.254/latest/meta-data/")
+
+    def test_private_address_is_refused(self):
+        with self.assertRaises(SafetyError):
+            validate_probe_url("http://192.168.1.1/")
+
+    def test_non_http_scheme_is_refused(self):
+        with self.assertRaises(SafetyError):
+            validate_probe_url("file:///etc/passwd")
+
+    def test_missing_hostname_is_refused(self):
+        with self.assertRaises(SafetyError):
+            validate_probe_url("http:///wp-json")
+
+
+class ValidateRemoteUrlStillHttpsOnlyTest(unittest.TestCase):
+    """validate_probe_url is a separate function precisely so the media
+    download path keeps its HTTPS-only guarantee."""
+
+    def test_http_media_url_is_still_refused(self):
+        with self.assertRaises(SafetyError):
+            validate_remote_url("http://93.184.216.34/logo.png")
+
+
+class ProbeHostTest(unittest.TestCase):
+    def test_public_literal_passes(self):
+        self.assertEqual(validate_probe_host("93.184.216.34"), "93.184.216.34")
+
+    def test_loopback_is_refused(self):
+        with self.assertRaises(SafetyError):
+            validate_probe_host("127.0.0.1")
+
+    def test_empty_host_is_refused(self):
+        with self.assertRaises(SafetyError):
+            validate_probe_host("")
+
+
+class ProbeRedirectTest(unittest.TestCase):
+    """Validating only the caller's URL is not enough: a public site is free to
+    answer 302 http://169.254.169.254/, and urlopen would follow it."""
+
+    def _redirect(self, to_url):
+        handler = security._PublicHostRedirectHandler()
+        req = urllib.request.Request("http://93.184.216.34/")
+        return handler.redirect_request(req, None, 302, "Found", None, to_url)
+
+    def test_redirect_to_an_internal_address_is_refused(self):
+        with self.assertRaises(SafetyError):
+            self._redirect("http://169.254.169.254/latest/meta-data/")
+
+    def test_redirect_to_a_public_address_is_followed(self):
+        self.assertEqual(self._redirect("https://93.184.216.34/x").full_url,
+                         "https://93.184.216.34/x")
+
+    def test_urlopen_probe_validates_before_opening(self):
+        """No socket is created: the refusal happens before the opener runs."""
+        with self.assertRaises(SafetyError):
+            security.urlopen_probe(urllib.request.Request("http://127.0.0.1/"))
+
+
+class NoBareAuthenticatedUrlopenTest(unittest.TestCase):
+    """Static invariant. A script that sends an Authorization header must open
+    it through urlopen_authenticated; a bare urllib.request.urlopen there is
+    the redirect credential leak this release fixed."""
+
+    def test_no_authenticated_script_calls_urlopen_directly(self):
+        offenders = []
+        for name in sorted(os.listdir(SCRIPTS)):
+            if not name.endswith(".py") or name == "security.py":
+                continue
+            source = open(os.path.join(SCRIPTS, name), encoding="utf-8").read()
+            if "Authorization" not in source:
+                continue
+            if "urllib.request.urlopen(" in source:
+                offenders.append(name)
+        self.assertEqual(offenders, [])

@@ -145,6 +145,52 @@ def validate_probe_url(url: str) -> str:
     return url
 
 
+def validate_probe_host(hostname: str) -> str:
+    """Validate a bare hostname the audit is about to connect to directly.
+
+    The TLS expiry check opens a socket to the host rather than fetching a
+    URL, so it has no scheme to validate - only the address rule applies.
+    """
+
+    if not hostname:
+        raise SafetyError("Audit host must not be empty")
+    _assert_public_host(hostname)
+    return hostname
+
+
+class _PublicHostRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Re-validate the target of every redirect the audit follows.
+
+    Validating only the URL the caller supplied is not enough: a public site
+    is free to answer 302 http://169.254.169.254/, and urlopen would follow it.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is None:
+            return None
+        validate_probe_url(new.full_url)
+        return new
+
+
+_PROBE_OPENER = urllib.request.build_opener(_PublicHostRedirectHandler)
+
+
+def urlopen_probe(req, timeout=None):
+    """urlopen for the unauthenticated site audit.
+
+    Validates the requested URL and the target of every redirect against the
+    public-address rule. Carries no credentials, so unlike
+    urlopen_authenticated it has no Authorization header to strip.
+    """
+
+    url = req.full_url if isinstance(req, urllib.request.Request) else req
+    validate_probe_url(url)
+    if timeout is None:
+        return _PROBE_OPENER.open(req)
+    return _PROBE_OPENER.open(req, timeout=timeout)
+
+
 def read_limited_response(response, *, max_bytes: int = DEFAULT_MAX_BYTES) -> bytes:
     """Read a response body with a strict size limit."""
 
