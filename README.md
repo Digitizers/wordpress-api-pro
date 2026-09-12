@@ -63,7 +63,7 @@ ClawHub package directory: `wordpress-api-pro/`.
 
 ## Version
 
-Current version: **3.9.2**
+Current version: **3.9.3**
 
 ## Installation
 

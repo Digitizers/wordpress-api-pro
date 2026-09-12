@@ -7,9 +7,11 @@ portable inside OpenClaw agent environments.
 
 from __future__ import annotations
 
+import http.client
 import ipaddress
 import os
 import socket
+import ssl
 import sys
 import urllib.parse
 import urllib.request
@@ -108,14 +110,16 @@ def validate_remote_url(url: str) -> str:
     return url
 
 
-def _assert_public_host(hostname: str) -> None:
+def _assert_public_host(hostname: str) -> list[str]:
     """Raise SafetyError unless every address the hostname resolves to is public.
 
     Shared by validate_remote_url (media downloads, HTTPS only) and
     validate_probe_url (the site audit, which must also reach http://).
-    Note: this resolves the name, and urlopen resolves it again, so a
-    DNS-rebinding attacker retains a narrow window. It still closes the
-    plain "audit http://192.168.1.1/" case, which is the realistic one.
+    Returns the validated addresses so a caller can CONNECT to one of them
+    rather than resolving the name a second time. Resolving twice is a
+    time-of-check/time-of-use gap: an attacker controlling the name can answer
+    a public address for the check and a private one microseconds later, when
+    urlopen resolves it again. The pinned handlers below close that window.
     """
 
     try:
@@ -145,6 +149,7 @@ def _assert_public_host(hostname: str) -> None:
             ]
         ):
             raise SafetyError(f"Refusing host {hostname!r}; resolved to unsafe address {address}")
+    return [str(address) for address in addresses]
 
 
 def validate_probe_url(url: str) -> str:
@@ -201,8 +206,97 @@ class _ValidatingRedirectHandler(urllib.request.HTTPRedirectHandler):
         return new
 
 
-_PROBE_OPENER = urllib.request.build_opener(_ValidatingRedirectHandler(validate_probe_url))
-_MEDIA_OPENER = urllib.request.build_opener(_ValidatingRedirectHandler(validate_remote_url))
+def _public_addresses(hostname: str) -> list[str]:
+    """Validated addresses for a hostname, in order, without duplicates."""
+
+    seen: set[str] = set()
+    unique: list[str] = []
+    for address in _assert_public_host(hostname):
+        if address not in seen:
+            seen.add(address)
+            unique.append(address)
+    return unique
+
+
+def _connect_to_public_host(host, port, timeout, source_address=None):
+    """Open a socket to an address this module just validated.
+
+    Everything that enforces the address rule connects through here, so the
+    address that was checked is the address that is used. Resolving the name
+    again at connect time is the DNS-rebinding hole: the check and the use
+    would be two different lookups, and an attacker who controls the name
+    decides what the second one returns.
+    """
+
+    last_error = None
+    for address in _public_addresses(host):
+        try:
+            return socket.create_connection((address, port), timeout, source_address)
+        except OSError as exc:      # try the next address, as getaddrinfo order intends
+            last_error = exc
+    raise last_error if last_error else SafetyError(f"Host {host!r} resolved to no usable address")
+
+
+class _PinnedHTTPConnection(http.client.HTTPConnection):
+    """HTTPConnection that dials a validated address instead of re-resolving."""
+
+    def connect(self):
+        self.sock = _connect_to_public_host(self.host, self.port, self.timeout, self.source_address)
+        if self._tunnel_host:
+            self._tunnel()
+
+
+class _PinnedHTTPSConnection(http.client.HTTPSConnection):
+    """As above, with TLS still verified against the NAME, not the address.
+
+    The certificate and SNI use self.host, so pinning the address changes only
+    which endpoint is dialled - it never weakens certificate validation.
+    """
+
+    def connect(self):
+        sock = _connect_to_public_host(self.host, self.port, self.timeout, self.source_address)
+        if self._tunnel_host:
+            self.sock = sock
+            self._tunnel()
+            sock = self.sock
+        self.sock = self._context.wrap_socket(sock, server_hostname=self._tunnel_host or self.host)
+
+
+class _PinnedHTTPHandler(urllib.request.HTTPHandler):
+    def http_open(self, req):
+        return self.do_open(_PinnedHTTPConnection, req)
+
+
+class _PinnedHTTPSHandler(urllib.request.HTTPSHandler):
+    def https_open(self, req):
+        return self.do_open(_PinnedHTTPSConnection, req, context=self._context)
+
+
+def _address_enforcing_opener(validator):
+    """An opener that holds every hop AND every connection to `validator`."""
+
+    return urllib.request.build_opener(
+        _PinnedHTTPHandler(), _PinnedHTTPSHandler(), _ValidatingRedirectHandler(validator))
+
+
+_PROBE_OPENER = _address_enforcing_opener(validate_probe_url)
+_MEDIA_OPENER = _address_enforcing_opener(validate_remote_url)
+
+
+def connect_public_tls(host, port=443, timeout=10):
+    """TLS-connect to a validated address for `host`, for certificate inspection.
+
+    The site audit's expiry check opens its own socket rather than fetching a
+    URL, so it needs the same pinning the openers above apply.
+    """
+
+    context = ssl.create_default_context()
+    sock = _connect_to_public_host(host, port, timeout)
+    try:
+        return context.wrap_socket(sock, server_hostname=host)
+    except Exception:
+        sock.close()
+        raise
 
 
 def urlopen_probe(req, timeout=None):

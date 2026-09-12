@@ -9,15 +9,19 @@ Usage:
     python3 site_audit.py https://example.com --summary
 Env (optional): PAGESPEED_API_KEY  (higher PageSpeed Insights quota)
 """
-import argparse, json, os, re, ssl, socket, sys, urllib.request, urllib.parse, urllib.error
+import argparse, json, os, re, sys, urllib.request, urllib.parse, urllib.error
 from datetime import datetime, timezone
 
 from security import (
-    HostResolutionError, SafetyError, die_safety, urlopen_probe, validate_probe_host,
+    HostResolutionError, SafetyError, connect_public_tls, die_safety, urlopen_probe,
     validate_probe_url,
 )
 
 UA = "Mozilla/5.0 (compatible; DigitizerAudit/1.0)"
+# Ceiling on a response body. The audit parses the document head - title, meta,
+# generator, h1 - so truncating a huge page costs nothing, while reading one
+# unbounded lets any server it visits decide how much memory this process uses.
+MAX_BODY_BYTES = 5 * 1024 * 1024
 SECURITY_HEADERS = [
     "Strict-Transport-Security", "Content-Security-Policy", "X-Frame-Options",
     "X-Content-Type-Options", "Referrer-Policy",
@@ -91,23 +95,23 @@ def _get(url, method="GET", timeout=15):
     req = urllib.request.Request(url, method=method, headers={"User-Agent": UA})
     try:
         with urlopen_probe(req, timeout=timeout) as r:
-            body = r.read().decode("utf-8", "replace") if method == "GET" else ""
+            body = r.read(MAX_BODY_BYTES).decode("utf-8", "replace") if method == "GET" else ""
             return r.getcode(), dict(r.headers), r.geturl(), body
     except urllib.error.HTTPError as e:
         # An HTTP 4xx/5xx is a *reachable* server — return its status, headers,
         # url and body so the status/header/SEO checks still run. Only DNS /
         # timeout / connection-refused (URLError, socket errors) mean unreachable,
         # and those propagate to the caller's generic except.
-        body = e.read().decode("utf-8", "replace") if method == "GET" else ""
+        body = e.read(MAX_BODY_BYTES).decode("utf-8", "replace") if method == "GET" else ""
         return e.code, dict(e.headers), e.geturl(), body
 
 
 def _ssl_notafter(host, port=443, timeout=10):
-    validate_probe_host(host)
-    ctx = ssl.create_default_context()
-    with socket.create_connection((host, port), timeout=timeout) as sock:
-        with ctx.wrap_socket(sock, server_hostname=host) as ssock:
-            return ssock.getpeercert().get("notAfter")
+    # connect_public_tls validates and dials one address, so the certificate is
+    # read from the endpoint that was checked. Validating the name and then
+    # letting create_connection resolve it again is the rebinding gap.
+    with connect_public_tls(host, port=port, timeout=timeout) as ssock:
+        return ssock.getpeercert().get("notAfter")
 
 
 def _url_exists(url):

@@ -1,5 +1,29 @@
 # Changelog
 
+## 3.9.3 — 2026-09-13
+
+From the ClawHub audit of 3.9.2. Two findings, both Medium, both reported by AIG
+and ClawScan independently.
+
+- **DNS rebinding closed.** The address rule resolved a hostname to check it and
+  then let urllib resolve it AGAIN to connect, so an attacker controlling the
+  name could answer a public address for the check and a private one
+  microseconds later. 3.9.0 documented this as a known narrow window and shipped
+  it; the skill's own disclosure claimed address enforcement, so the gap was
+  between the claim and the behaviour. `_assert_public_host` now returns the
+  addresses it approved, and everything that enforces the rule - both openers
+  and the TLS expiry check - DIALS one of them instead of re-resolving.
+  Certificate validation and SNI still use the hostname, so pinning the address
+  changes which endpoint is reached and nothing about how it is verified.
+- **Response bodies are bounded.** `site_audit` read both the success and the
+  HTTP-error body with a bare `read()`, so any server it visited decided how
+  much memory this process used. Both are capped at `MAX_BODY_BYTES` (5 MB); the
+  audit parses the document head, so a truncated giant page costs nothing.
+
+Every other item in that audit was evaluated and dismissed by ClawScan itself -
+five of its own scanner's matches were marked "unexpected", two of them on this
+skill's security comments.
+
 ## 3.9.2 — 2026-09-12
 
 From the ClawHub audit of 3.9.1. One real finding, which AIG and ClawScan both

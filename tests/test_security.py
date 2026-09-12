@@ -593,5 +593,91 @@ class RequestTimeoutTest(unittest.TestCase):
             security.DEFAULT_REQUEST_TIMEOUT)
 
 
+class DnsPinningTest(unittest.TestCase):
+    """The validator resolved the name and urlopen resolved it again, so an
+    attacker controlling the name could answer a public address for the check
+    and a private one for the connection (ClawHub audit of 3.9.2: AIG and
+    ClawScan). Everything that enforces the rule now DIALS a validated address."""
+
+    def _serve(self):
+        import threading
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+
+        class H(BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b"payload")
+            def log_message(self, *a):
+                pass
+
+        srv = HTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.shutdown)
+        return f"http://127.0.0.1:{srv.server_address[1]}/", srv.server_address[1]
+
+    def test_a_loopback_target_is_refused_at_connect_time(self):
+        url, _ = self._serve()
+        with self.assertRaises(SafetyError):
+            security._PROBE_OPENER.open(url, timeout=5)
+
+    def test_the_pinned_opener_still_transports_a_request(self):
+        """The refusal above must come from the rule, not from a broken opener."""
+        from unittest import mock as _mock
+        url, _ = self._serve()
+        with _mock.patch.object(security, "_assert_public_host", return_value=["127.0.0.1"]):
+            response = security._PROBE_OPENER.open(url, timeout=5)
+        self.assertEqual(response.status, 200)
+        self.assertEqual(response.read(), b"payload")
+
+    def test_the_connection_dials_the_validated_address(self):
+        from unittest import mock as _mock
+        _, port = self._serve()
+        with _mock.patch.object(security, "_assert_public_host", return_value=["127.0.0.1"]):
+            sock = security._connect_to_public_host("any.example", port, 5)
+        self.addCleanup(sock.close)
+        self.assertEqual(sock.getpeername()[0], "127.0.0.1")
+
+    def test_a_refused_address_is_never_dialled(self):
+        with self.assertRaises(SafetyError):
+            security._connect_to_public_host("127.0.0.1", 9, 5)
+
+    def test_validation_returns_the_addresses_it_approved(self):
+        """Returning them is what lets the caller pin one instead of re-resolving."""
+        self.assertEqual(security._public_addresses("8.8.8.8"), ["8.8.8.8"])
+
+    def test_the_audit_no_longer_opens_its_own_socket(self):
+        source = open(os.path.join(SCRIPTS, "site_audit.py"), encoding="utf-8").read()
+        self.assertNotIn("socket.create_connection", source)
+        self.assertIn("connect_public_tls(", source)
+
+    def test_tls_verification_still_uses_the_hostname(self):
+        """Pinning the address must not weaken certificate checking."""
+        source = open(os.path.join(SCRIPTS, "security.py"), encoding="utf-8").read()
+        body = source[source.index("class _PinnedHTTPSConnection"):]
+        body = body[:body.index("class _PinnedHTTPHandler")]
+        self.assertIn("server_hostname=self._tunnel_host or self.host", body)
+
+
+class AuditBodyLimitTest(unittest.TestCase):
+    """site_audit read response bodies with a bare read(), so any server it
+    visited decided how much memory this process used."""
+
+    def test_both_read_paths_are_bounded(self):
+        source = open(os.path.join(SCRIPTS, "site_audit.py"), encoding="utf-8").read()
+        self.assertNotIn("r.read().decode", source)
+        self.assertNotIn("e.read().decode", source)
+        self.assertIn("r.read(MAX_BODY_BYTES)", source)
+        self.assertIn("e.read(MAX_BODY_BYTES)", source)
+
+    def test_the_cap_is_applied_to_a_real_oversized_body(self):
+        import io, site_audit as sa
+        class Huge(io.RawIOBase):
+            def read(self, n=-1):
+                return b"x" * (n if n and n > 0 else 1024)
+        capped = Huge().read(sa.MAX_BODY_BYTES)
+        self.assertEqual(len(capped), sa.MAX_BODY_BYTES)
+
+
 if __name__ == "__main__":
     unittest.main()
