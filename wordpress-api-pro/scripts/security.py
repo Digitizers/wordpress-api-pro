@@ -17,6 +17,10 @@ from pathlib import Path
 from typing import Iterable
 
 DEFAULT_MAX_BYTES = 10 * 1024 * 1024  # 10 MB
+# Ceiling on any request that does not set its own. Not a performance knob -
+# it exists so a hung or black-holed connection cannot stall an agent for
+# ever. Generous enough for a 10 MB media upload on a slow link.
+DEFAULT_REQUEST_TIMEOUT = 300  # seconds
 TEXT_MAX_BYTES = 2 * 1024 * 1024  # 2 MB
 
 
@@ -175,22 +179,30 @@ def validate_probe_host(hostname: str) -> str:
     return hostname
 
 
-class _PublicHostRedirectHandler(urllib.request.HTTPRedirectHandler):
-    """Re-validate the target of every redirect the audit follows.
+class _ValidatingRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Re-validate the target of every redirect, with the caller's own rule.
 
-    Validating only the URL the caller supplied is not enough: a public site
-    is free to answer 302 http://169.254.169.254/, and urlopen would follow it.
+    Validating only the URL the caller supplied is not enough: a public host is
+    free to answer a redirect to an internal address, and urlopen would follow
+    it. The rule differs by caller - the audit may follow http://, a media
+    download may not - so the validator is a parameter rather than a fixed
+    policy.
     """
+
+    def __init__(self, validator):
+        super().__init__()
+        self._validator = validator
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         new = super().redirect_request(req, fp, code, msg, headers, newurl)
         if new is None:
             return None
-        validate_probe_url(new.full_url)
+        self._validator(new.full_url)
         return new
 
 
-_PROBE_OPENER = urllib.request.build_opener(_PublicHostRedirectHandler)
+_PROBE_OPENER = urllib.request.build_opener(_ValidatingRedirectHandler(validate_probe_url))
+_MEDIA_OPENER = urllib.request.build_opener(_ValidatingRedirectHandler(validate_remote_url))
 
 
 def urlopen_probe(req, timeout=None):
@@ -203,9 +215,8 @@ def urlopen_probe(req, timeout=None):
 
     url = req.full_url if isinstance(req, urllib.request.Request) else req
     validate_probe_url(url)
-    if timeout is None:
-        return _PROBE_OPENER.open(req)
-    return _PROBE_OPENER.open(req, timeout=timeout)
+    return _PROBE_OPENER.open(
+        req, timeout=DEFAULT_REQUEST_TIMEOUT if timeout is None else timeout)
 
 
 def read_limited_response(response, *, max_bytes: int = DEFAULT_MAX_BYTES) -> bytes:
@@ -229,7 +240,11 @@ def fetch_https_media(url: str, *, timeout: int = 20, max_bytes: int = DEFAULT_M
 
     validate_remote_url(url)
     request = urllib.request.Request(url, headers={"User-Agent": "wordpress-api-pro/3.4.0"})
-    response = urllib.request.urlopen(request, timeout=timeout)
+    # Through the media opener, so a redirect is held to the same rule as the
+    # URL the caller supplied: HTTPS only, and a globally reachable address.
+    # Without it a public HTTPS host could redirect to http://127.0.0.1/ and
+    # urlopen would follow, which is the SSRF this validator exists to prevent.
+    response = _MEDIA_OPENER.open(request, timeout=timeout)
     body = read_limited_response(response, max_bytes=max_bytes)
     return response, body
 
@@ -279,14 +294,14 @@ def urlopen_authenticated(req, timeout=None):
     """urlopen for requests that carry credentials.
 
     Identical to urllib.request.urlopen except that a redirect crossing the
-    origin loses the Authorization header. Every authenticated call in this
+    origin loses the Authorization header, and an unset timeout is bounded
+    rather than infinite. Every authenticated call in this
     skill goes through here; a bare urlopen with an Authorization header is a
     credential-forwarding bug.
     """
 
-    if timeout is None:
-        return _AUTH_SAFE_OPENER.open(req)
-    return _AUTH_SAFE_OPENER.open(req, timeout=timeout)
+    return _AUTH_SAFE_OPENER.open(
+        req, timeout=DEFAULT_REQUEST_TIMEOUT if timeout is None else timeout)
 
 
 def check_wp_url_scheme(url, env=None):

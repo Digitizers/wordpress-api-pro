@@ -1,6 +1,6 @@
 ---
 name: wordpress-api-pro
-version: 3.9.1
+version: 3.9.2
 license: MIT-0
 description: |
   Production-grade WordPress REST API integration for managing posts, pages, media, WooCommerce products, Elementor content, SEO meta, ACF, and JetEngine fields.
@@ -35,7 +35,7 @@ for the repo's `bash INSTALL.sh` — that installer lives in the git repo, not i
 the packaged skill):
 
 - **Auth:** export `WP_URL` / `WP_USERNAME` / `WP_APP_PASSWORD`, or use `config/sites.json` for multi-site.
-- **Dependencies:** the ACF / SEO / JetEngine / plugin-detection scripts need `requests` (`python3 -m pip install -r requirements.txt`, ideally in a venv). The pin is `requests>=2.32.3`: 2.32.0 fixed CVE-2024-35195, where a `Session` that made one `verify=False` request silently skipped certificate verification for every later request to that host, and 2.32.3 closes out that line's follow-up regressions. The core post/page/media/WooCommerce/batch scripts use the stdlib only.
+- **Dependencies:** the ACF / SEO / JetEngine / plugin-detection scripts need `requests` (`python3 -m pip install -r requirements.txt`, ideally in a venv). The pin is `requests>=2.32.3,<3`: 2.32.0 fixed CVE-2024-35195, where a `Session` that made one `verify=False` request silently skipped certificate verification for every later request to that host, and 2.32.3 closes out that line's follow-up regressions. The core post/page/media/WooCommerce/batch scripts use the stdlib only.
 - **Local dev sites** (e.g. `http://site.local`, `localhost`, `*.test`, `*.localhost`) work over plaintext http. Any other host must be https:// unless you set `WP_ALLOW_HTTP=1`, because Basic-Auth credentials would otherwise travel in the clear.
 - **Pairs with the Elementor MCP kit** (`siteagent-elementor-studio`): build page structure with the MCP, then do media uploads, SEO meta, custom fields, and WooCommerce here.
 

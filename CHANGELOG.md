@@ -1,5 +1,35 @@
 # Changelog
 
+## 3.9.2 — 2026-09-12
+
+From the ClawHub audit of 3.9.1. One real finding, which AIG and ClawScan both
+reported independently.
+
+- **Remote media downloads followed redirects unchecked.** `fetch_https_media`
+  validated the URL the caller supplied and then used urllib's default redirect
+  handling, so a public HTTPS host could answer `302 http://127.0.0.1/` - or any
+  private, loopback or link-local address - and the download would follow it,
+  scheme downgrade included. 3.9.0 built exactly the right defence for the site
+  audit (`_PublicHostRedirectHandler`) and did not apply it here. The redirect
+  handler is now parameterised by the caller's own validator
+  (`_ValidatingRedirectHandler`), so the media path re-validates every redirect
+  against its HTTPS-only, globally-reachable rule and the audit path keeps its
+  own. A static test fails if `security.py` ever calls `urllib.request.urlopen`
+  directly again.
+- Requests with no explicit timeout are bounded by `DEFAULT_REQUEST_TIMEOUT`
+  (300s) instead of urllib's default of none, so a hung or black-holed
+  connection cannot stall an agent indefinitely. An explicit timeout still wins.
+- `requests` gains an upper bound: `>=2.32.3,<3`. An exact pin was considered and
+  rejected - it would stop users receiving patch-level security fixes for a
+  dependency whose last advisory is the reason for the lower bound.
+
+Not changed: SkillSpector again reports `DO_NOT_INSTALL` at severity CRITICAL.
+Its four HIGH findings are text matches, two of them on this skill's own
+security comments - the `169.254.169.254` in the docstring explaining the SSRF
+defence, and the phrase "never warn" in the one explaining the localhost
+exemption. ClawScan evaluated both and downgraded them explicitly. Writing the
+defence is what raised that scanner's issue count from 19 to 24.
+
 ## 3.9.1 — 2026-09-12
 
 - `acf_fields` and `jetengine_fields` printed `{"error": ...}` and still exited
