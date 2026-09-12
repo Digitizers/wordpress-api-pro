@@ -19,13 +19,13 @@ class FakeResp:
 
 class ResolveRestBaseTest(unittest.TestCase):
     def test_uses_rest_base_from_types(self):
-        with mock.patch.object(create_post.urllib.request, "urlopen",
+        with mock.patch.object(create_post, "urlopen_authenticated",
                                return_value=FakeResp({"rest_base": "projects"})):
             self.assertEqual(
                 create_post.resolve_rest_base("http://x", "a", "projects"), "projects")
 
     def test_falls_back_to_slug_on_error(self):
-        with mock.patch.object(create_post.urllib.request, "urlopen",
+        with mock.patch.object(create_post, "urlopen_authenticated",
                                side_effect=Exception("404")):
             self.assertEqual(
                 create_post.resolve_rest_base("http://x", "a", "team"), "team")
@@ -59,7 +59,7 @@ class ResolveTermsTest(unittest.TestCase):
             FakeResp({"rest_base": "project_category"}),   # taxonomy rest base
             FakeResp([{"id": 5, "name": "Branding"}]),     # term search hit
         ]
-        with mock.patch.object(create_post.urllib.request, "urlopen",
+        with mock.patch.object(create_post, "urlopen_authenticated",
                                side_effect=responses):
             out = create_post.resolve_terms("http://x", "a",
                                              {"project_category": ["Branding"]},
@@ -79,7 +79,7 @@ class ResolveTermsTest(unittest.TestCase):
                 return FakeResp({"rest_base": "genre"})
             return FakeResp([{"id": 9, "name": "Jazz"}])
 
-        with mock.patch.object(create_post.urllib.request, "urlopen",
+        with mock.patch.object(create_post, "urlopen_authenticated",
                                side_effect=fake_urlopen):
             out = create_post.resolve_terms("http://x", "a",
                                              {"music_genre": ["Jazz"]},
@@ -94,7 +94,7 @@ class SetFeaturedImageTest(unittest.TestCase):
         """A featured-image failure must raise a normal Exception so a batching
         caller (seed_content.seed) can record a per-entry failure — never
         SystemExit, which its `except Exception` would not catch."""
-        with mock.patch.object(upload_media.urllib.request, "urlopen",
+        with mock.patch.object(upload_media, "urlopen_authenticated",
                                side_effect=Exception("boom")):
             try:
                 upload_media.set_featured_image("http://x", "u", "p", 1, 2)
@@ -106,7 +106,7 @@ class SetFeaturedImageTest(unittest.TestCase):
                 self.fail("set_featured_image did not raise on failure")
 
     def test_failure_raises_runtimeerror(self):
-        with mock.patch.object(upload_media.urllib.request, "urlopen",
+        with mock.patch.object(upload_media, "urlopen_authenticated",
                                side_effect=Exception("boom")):
             with self.assertRaises(RuntimeError):
                 upload_media.set_featured_image("http://x", "u", "p", 1, 2)
@@ -119,7 +119,7 @@ class SetFeaturedImageTest(unittest.TestCase):
             seen["url"] = req.full_url
             return FakeResp({"id": 7, "featured_media": 2})
 
-        with mock.patch.object(upload_media.urllib.request, "urlopen",
+        with mock.patch.object(upload_media, "urlopen_authenticated",
                                side_effect=fake_urlopen):
             upload_media.set_featured_image("http://x", "u", "p", 7, 2, rest_base="projects")
         self.assertIn("/wp-json/wp/v2/projects/7", seen["url"])

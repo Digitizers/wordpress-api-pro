@@ -26,7 +26,7 @@ from base64 import b64encode
 import importlib.util as _ilu, pathlib as _pl
 if not _ilu.find_spec("security"):
     sys.path.insert(0, str(_pl.Path(__file__).parent))
-from security import warn_insecure_wp_url
+from security import warn_insecure_wp_url, urlopen_authenticated
 
 def load_config(config_path=None):
     """Load sites configuration"""
@@ -64,7 +64,7 @@ def update_post(site, post_id, updates, dry_run=False):
     request.add_header('Content-Type', 'application/json')
     
     try:
-        with urllib.request.urlopen(request) as response:
+        with urlopen_authenticated(request) as response:
             result = json.loads(response.read().decode('utf-8'))
             print(f"  ✓ Updated post {post_id}")
             return True
