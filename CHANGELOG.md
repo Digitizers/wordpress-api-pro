@@ -1,5 +1,24 @@
 # Changelog
 
+## 3.9.4 — 2026-09-13
+
+From the ClawHub audit of 3.9.3, which found one issue - both AIG and ClawScan
+reported it, and every networking finding from the previous audits is gone.
+
+- **A created WooCommerce product is a draft.** WooCommerce publishes a product
+  whose `status` is omitted, so `woo_products.py --action create` put a priced,
+  purchasable, indexable product straight onto a live storefront - with no draft
+  default and no confirmation, while `SKILL.md` says to prefer drafts and get
+  approval before live writes. It now sends `draft` unless `--status` says
+  otherwise, and prompts at a TTY before creating or switching a product to
+  `publish` (`--yes` skips it). Non-interactive runs are never prompted, exactly
+  as `create_post` already behaves - this is a guard for a human at a terminal,
+  not a gate an automation has to work around.
+- `woo_products.py` ran its whole CLI at import, which is why none of it could be
+  tested. It is under `main()` now. The three other scripts that share that shape
+  (`get_post`, `list_posts`, `elementor_content`) are unchanged here; they are
+  read-mostly and were not part of this finding.
+
 ## 3.9.3 — 2026-09-13
 
 From the ClawHub audit of 3.9.2. Two findings, both Medium, both reported by AIG
