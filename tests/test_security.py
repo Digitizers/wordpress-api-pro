@@ -831,5 +831,70 @@ class ProxyWarningTest(unittest.TestCase):
             self.assertIn("_warn_proxy_in_use()", body, fn)
 
 
+class WooProductSafetyTest(unittest.TestCase):
+    """WooCommerce publishes a product whose status is omitted, so
+    "woo_products --action create" put a priced, purchasable, indexable product
+    straight onto a live storefront - with no draft default and no confirmation,
+    while SKILL.md says to prefer drafts and confirm live writes (ClawHub audit
+    of 3.9.3: AIG and ClawScan)."""
+
+    def setUp(self):
+        import woo_products
+        self.woo = woo_products
+
+    def _created(self, **kwargs):
+        from unittest import mock as _mock
+        with _mock.patch.object(self.woo, "make_wc_request",
+                                side_effect=lambda *a, **k: k.get("data")):
+            return self.woo.create_product("https://shop.example", "k", "s", "T", "9.99", **kwargs)
+
+    def test_a_created_product_defaults_to_draft(self):
+        self.assertEqual(self._created()["status"], "draft")
+
+    def test_an_explicit_status_still_wins(self):
+        self.assertEqual(self._created(status="publish")["status"], "publish")
+
+    def test_an_explicit_draft_is_honoured(self):
+        self.assertEqual(self._created(status="draft")["status"], "draft")
+
+    def test_price_and_name_are_unchanged_by_the_default(self):
+        data = self._created()
+        self.assertEqual((data["name"], data["regular_price"], data["type"]),
+                         ("T", "9.99", "simple"))
+
+    def test_a_live_product_prompts_at_a_terminal(self):
+        from unittest import mock as _mock
+        with _mock.patch("builtins.input", return_value="PUBLISH"):
+            self.woo.confirm_live_product("https://shop.example", "publish", False, "CREATE",
+                                          is_tty=True)
+
+    def test_a_refused_prompt_aborts(self):
+        from unittest import mock as _mock
+        with _mock.patch("builtins.input", return_value="no"):
+            with self.assertRaises(SystemExit) as caught:
+                self.woo.confirm_live_product("https://shop.example", "publish", False, "CREATE",
+                                              is_tty=True)
+        self.assertEqual(caught.exception.code, 1)
+
+    def test_an_agent_or_ci_run_is_never_prompted(self):
+        """No TTY means no prompt - this is a guard for a human at a terminal,
+        not a gate an automation has to work around."""
+        from unittest import mock as _mock
+        with _mock.patch("builtins.input", side_effect=AssertionError("must not prompt")):
+            self.woo.confirm_live_product("https://shop.example", "publish", False, "CREATE",
+                                          is_tty=False)
+
+    def test_a_draft_is_never_prompted(self):
+        from unittest import mock as _mock
+        with _mock.patch("builtins.input", side_effect=AssertionError("must not prompt")):
+            self.woo.confirm_live_product("https://shop.example", "draft", False, "CREATE",
+                                          is_tty=True)
+
+    def test_the_cli_confirms_before_creating_and_before_publishing(self):
+        source = open(os.path.join(SCRIPTS, "woo_products.py"), encoding="utf-8").read()
+        self.assertIn('confirm_live_product(args.url, status, args.yes, "CREATE")', source)
+        self.assertIn('confirm_live_product(args.url, args.status, args.yes, "PUBLISH")', source)
+
+
 if __name__ == "__main__":
     unittest.main()

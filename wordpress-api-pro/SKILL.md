@@ -1,6 +1,6 @@
 ---
 name: wordpress-api-pro
-version: 3.9.3
+version: 3.9.4
 license: MIT-0
 description: |
   Production-grade WordPress REST API integration for managing posts, pages, media, WooCommerce products, Elementor content, SEO meta, ACF, and JetEngine fields.
@@ -47,6 +47,7 @@ the packaged skill):
 - **Do not store production credentials in the repo.** Use environment variables when possible.
 - **Protect config files.** If you create `config/sites.json`, keep it local, untracked, and `chmod 600 config/sites.json`.
 - **Batch changes are dry-run by default.** Add `--execute` only after reviewing the dry-run output.
+- **A created WooCommerce product is a draft.** WooCommerce publishes a product whose status is omitted; `woo_products.py --action create` sends `draft` unless you pass `--status publish`, and prompts at a TTY before a live one (`--yes` skips, non-interactive runs are never prompted).
 - **Targeting every site is blocked by default.** Add `--allow-all` only when the user explicitly approved all configured sites.
 - **Local file reads are restricted.** `--content-file` and media uploads can read only from the current working directory by default. Set `WP_ALLOWED_FILE_ROOTS` to opt into another safe directory.
 - **Remote media URLs are opt-in.** `upload_media.py` requires `--allow-remote-url` or `WP_ALLOW_REMOTE_URLS=1`, allows HTTPS only, and blocks private/local network hosts.
