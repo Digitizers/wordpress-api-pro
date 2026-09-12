@@ -32,7 +32,7 @@ import requests
 from base64 import b64encode
 from security import require_secure_wp_url
 
-def get_jetengine_fields(url, username, password, post_id, field_name=None):
+def get_jetengine_fields(url, username, password, post_id, field_name=None, include_private=False):
     """Get JetEngine fields (stored as postmeta)"""
     
     credentials = f"{username}:{password}"
@@ -53,8 +53,11 @@ def get_jetengine_fields(url, username, password, post_id, field_name=None):
             
             # JetEngine fields can have various naming conventions
             # Common patterns: no prefix, 'jet_' prefix, or custom field group names
-            # We'll return all meta that doesn't start with underscore (private meta)
-            jetengine_fields = {k: v for k, v in meta.items() if not k.startswith('_')}
+            # Private meta (leading underscore) is hidden unless include_private is set
+            jetengine_fields = (
+                dict(meta) if include_private
+                else {k: v for k, v in meta.items() if not k.startswith('_')}
+            )
             
             if field_name:
                 return {field_name: jetengine_fields.get(field_name)}
@@ -145,7 +148,8 @@ def main():
         # Get operation
         else:
             result = get_jetengine_fields(args.url, args.username, args.app_password, 
-                                         args.post_id, args.field)
+                                         args.post_id, args.field,
+                                         include_private=args.list_all)
             print(json.dumps(result, indent=2))
             
     except json.JSONDecodeError as e:
