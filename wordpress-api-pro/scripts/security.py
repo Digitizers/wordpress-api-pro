@@ -24,6 +24,16 @@ class SafetyError(ValueError):
     """Raised when an input crosses the skill's safety boundaries."""
 
 
+class HostResolutionError(SafetyError):
+    """A hostname could not be resolved at all.
+
+    Unreachable, not unsafe - a typo'd domain is not an attempt to reach
+    internal infrastructure, and the site audit has to keep reporting it as a
+    site that did not respond. Subclasses SafetyError so callers that only
+    care about "this was refused" (the media and file paths) are unchanged.
+    """
+
+
 def _split_roots(raw: str | None) -> list[Path]:
     if not raw:
         return [Path.cwd().resolve()]
@@ -90,17 +100,37 @@ def validate_remote_url(url: str) -> str:
     if not parsed.hostname:
         raise SafetyError("Remote URL must include a hostname")
 
-    hostname = parsed.hostname
+    _assert_public_host(parsed.hostname)
+    return url
+
+
+def _assert_public_host(hostname: str) -> None:
+    """Raise SafetyError unless every address the hostname resolves to is public.
+
+    Shared by validate_remote_url (media downloads, HTTPS only) and
+    validate_probe_url (the site audit, which must also reach http://).
+    Note: this resolves the name, and urlopen resolves it again, so a
+    DNS-rebinding attacker retains a narrow window. It still closes the
+    plain "audit http://192.168.1.1/" case, which is the realistic one.
+    """
+
     try:
         addresses = list(_hostname_addresses(hostname))
     except socket.gaierror as exc:
-        raise SafetyError(f"Could not resolve remote URL host {hostname!r}: {exc}") from exc
+        raise HostResolutionError(f"Could not resolve host {hostname!r}: {exc}") from exc
 
     if not addresses:
-        raise SafetyError(f"Remote URL host {hostname!r} resolved to no addresses")
+        raise SafetyError(f"Host {hostname!r} resolved to no addresses")
 
     for address in addresses:
-        if any(
+        # is_global is the allowlist half and carries the rule: enumerating
+        # non-public categories misses whatever the enumeration forgot, and it
+        # forgot RFC 6598 shared address space (100.64.0.0/10) - a CGNAT
+        # address is none of private/loopback/link-local/multicast/reserved/
+        # unspecified to Python, and is routable on the networks that use it.
+        # The named flags stay as the deny half: 64:ff9b::/96 is is_global and
+        # still not somewhere this skill should be pointed.
+        if not address.is_global or any(
             [
                 address.is_private,
                 address.is_loopback,
@@ -110,9 +140,72 @@ def validate_remote_url(url: str) -> str:
                 address.is_unspecified,
             ]
         ):
-            raise SafetyError(f"Refusing remote URL host {hostname!r}; resolved to unsafe address {address}")
+            raise SafetyError(f"Refusing host {hostname!r}; resolved to unsafe address {address}")
 
+
+def validate_probe_url(url: str) -> str:
+    """Validate a URL the unauthenticated site audit is about to probe.
+
+    Unlike validate_remote_url this permits http://, because detecting whether
+    a site redirects to HTTPS is one of the audit's own checks. It still
+    refuses any host that resolves to a private, loopback, link-local,
+    multicast, reserved or unspecified address, so the audit cannot be pointed
+    at internal infrastructure.
+    """
+
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise SafetyError("Audit URLs must use http:// or https://")
+    if not parsed.hostname:
+        raise SafetyError("Audit URL must include a hostname")
+    _assert_public_host(parsed.hostname)
     return url
+
+
+def validate_probe_host(hostname: str) -> str:
+    """Validate a bare hostname the audit is about to connect to directly.
+
+    The TLS expiry check opens a socket to the host rather than fetching a
+    URL, so it has no scheme to validate - only the address rule applies.
+    """
+
+    if not hostname:
+        raise SafetyError("Audit host must not be empty")
+    _assert_public_host(hostname)
+    return hostname
+
+
+class _PublicHostRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Re-validate the target of every redirect the audit follows.
+
+    Validating only the URL the caller supplied is not enough: a public site
+    is free to answer 302 http://169.254.169.254/, and urlopen would follow it.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is None:
+            return None
+        validate_probe_url(new.full_url)
+        return new
+
+
+_PROBE_OPENER = urllib.request.build_opener(_PublicHostRedirectHandler)
+
+
+def urlopen_probe(req, timeout=None):
+    """urlopen for the unauthenticated site audit.
+
+    Validates the requested URL and the target of every redirect against the
+    public-address rule. Carries no credentials, so unlike
+    urlopen_authenticated it has no Authorization header to strip.
+    """
+
+    url = req.full_url if isinstance(req, urllib.request.Request) else req
+    validate_probe_url(url)
+    if timeout is None:
+        return _PROBE_OPENER.open(req)
+    return _PROBE_OPENER.open(req, timeout=timeout)
 
 
 def read_limited_response(response, *, max_bytes: int = DEFAULT_MAX_BYTES) -> bytes:
@@ -141,11 +234,76 @@ def fetch_https_media(url: str, *, timeout: int = 20, max_bytes: int = DEFAULT_M
     return response, body
 
 
-def warn_insecure_wp_url(url, env=None):
-    """Warn when a WordPress API URL is plaintext http:// on a non-local host.
-    Basic-Auth credentials would travel unencrypted. Localhost/dev hosts are exempt.
-    With WP_REQUIRE_HTTPS=1 this raises SafetyError instead of warning.
-    Returns the url unchanged (never mutates it)."""
+class _AuthStrippingRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Drop the Authorization header when a redirect leaves the origin.
+
+    CPython's HTTPRedirectHandler copies every header except content-length
+    and content-type onto the redirected request, so a WordPress site (or
+    anything in front of it) answering 30x with a Location on another host
+    receives the Basic-Auth application password verbatim. requests strips it;
+    urllib does not. Same-origin redirects keep the header so ordinary
+    WordPress behaviour (trailing slashes, canonical URLs) still works.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is None:
+            return None
+        if not same_origin(req.full_url, new.full_url):
+            for name in list(new.headers):
+                if name.lower() == "authorization":
+                    del new.headers[name]
+            # Request stores headers capitalized; unredirected_hdrs too.
+            for name in list(getattr(new, "unredirected_hdrs", {})):
+                if name.lower() == "authorization":
+                    del new.unredirected_hdrs[name]
+        return new
+
+
+def same_origin(first: str, second: str) -> bool:
+    """True when two URLs share scheme, host and effective port."""
+
+    a, b = urllib.parse.urlparse(first), urllib.parse.urlparse(second)
+    default = {"http": 80, "https": 443}
+    return (
+        a.scheme == b.scheme
+        and (a.hostname or "").lower() == (b.hostname or "").lower()
+        and (a.port or default.get(a.scheme)) == (b.port or default.get(b.scheme))
+    )
+
+
+_AUTH_SAFE_OPENER = urllib.request.build_opener(_AuthStrippingRedirectHandler)
+
+
+def urlopen_authenticated(req, timeout=None):
+    """urlopen for requests that carry credentials.
+
+    Identical to urllib.request.urlopen except that a redirect crossing the
+    origin loses the Authorization header. Every authenticated call in this
+    skill goes through here; a bare urlopen with an Authorization header is a
+    credential-forwarding bug.
+    """
+
+    if timeout is None:
+        return _AUTH_SAFE_OPENER.open(req)
+    return _AUTH_SAFE_OPENER.open(req, timeout=timeout)
+
+
+def check_wp_url_scheme(url, env=None):
+    """Refuse a WordPress API URL that is plaintext http:// on a non-local host.
+
+    Basic-Auth credentials would travel unencrypted, and an app password read
+    off the wire is the whole site. Localhost and .local/.test/.localhost dev
+    hosts are exempt and never warn.
+
+    Refusing is the default as of 3.9.0; before that this only printed a
+    warning. Set WP_ALLOW_HTTP=1 to go back to a warning - for a plaintext
+    staging host you accept the risk on. WP_REQUIRE_HTTPS=1 still refuses and
+    wins over WP_ALLOW_HTTP, so an environment that pinned it stays strict.
+
+    Returns the url unchanged (never mutates it); raises SafetyError to refuse.
+    """
+
     env = env if env is not None else os.environ
     parsed = urllib.parse.urlparse(url if "://" in str(url) else "https://" + str(url))
     host = (parsed.hostname or "").lower()
@@ -157,13 +315,55 @@ def warn_insecure_wp_url(url, env=None):
     )
     if parsed.scheme == "http" and not is_local:
         msg = (
-            "SECURITY WARNING: WordPress URL '%s' uses plaintext http:// — "
-            "Basic-Auth credentials will be sent unencrypted. Use https:// in production." % url
+            "WordPress URL '%s' uses plaintext http:// - "
+            "Basic-Auth credentials would be sent unencrypted. Use https:// in production." % url
         )
-        if env.get("WP_REQUIRE_HTTPS") == "1":
-            raise SafetyError(msg + " (WP_REQUIRE_HTTPS=1 set — refusing.)")
-        print(msg, file=sys.stderr)
+        allow_http = env.get("WP_ALLOW_HTTP") == "1" and env.get("WP_REQUIRE_HTTPS") != "1"
+        if not allow_http:
+            raise SafetyError(msg + " (Set WP_ALLOW_HTTP=1 to send them anyway.)")
+        print("SECURITY WARNING: " + msg + " (WP_ALLOW_HTTP=1 set - continuing.)", file=sys.stderr)
     return url
+
+
+def require_secure_wp_url(url, env=None):
+    """check_wp_url_scheme at the CLI boundary: exit 2 instead of raising.
+
+    Every script calls this one line before it authenticates, so a refusal has
+    to read as a safety error rather than as an uncaught traceback.
+    """
+
+    try:
+        return check_wp_url_scheme(url, env=env)
+    except SafetyError as error:
+        die_safety(error)
+
+
+def check_wp_url_schemes(targets, env=None):
+    """Check a whole batch of targets up front. Returns a list of (label, message).
+
+    `targets` is an iterable of (label, url) pairs. A multi-site run must know
+    about every insecure URL BEFORE it writes to the first site: refusing in the
+    middle of the loop leaves the earlier sites modified, the later ones
+    untouched and no summary printed.
+    """
+
+    problems = []
+    for label, url in targets:
+        try:
+            check_wp_url_scheme(url, env=env)
+        except SafetyError as error:
+            problems.append((label, str(error)))
+    return problems
+
+
+def require_secure_wp_urls(targets, env=None):
+    """check_wp_url_schemes at the CLI boundary: exit 2 naming every offender."""
+
+    problems = check_wp_url_schemes(targets, env=env)
+    if problems:
+        for label, message in problems:
+            print(f"Safety error: {label}: {message}", file=sys.stderr)
+        sys.exit(2)
 
 
 def should_confirm_publish(status, assume_yes, is_tty):

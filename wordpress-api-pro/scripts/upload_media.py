@@ -3,7 +3,7 @@
 import argparse, json, os, sys, urllib.request, urllib.parse, urllib.error, mimetypes
 from base64 import b64encode
 
-from security import SafetyError, die_safety, fetch_https_media, validate_local_file, warn_insecure_wp_url
+from security import SafetyError, die_safety, fetch_https_media, validate_local_file, require_secure_wp_url, urlopen_authenticated
 
 def upload_media(url, username, app_credential, file_path, title=None, alt_text=None, caption=None, allow_remote_url=False):
     """Upload a media file to WordPress"""
@@ -85,7 +85,7 @@ def upload_media(url, username, app_credential, file_path, title=None, alt_text=
     request.add_header('Content-Type', f'multipart/form-data; boundary={boundary}')
     
     try:
-        with urllib.request.urlopen(request) as response:
+        with urlopen_authenticated(request) as response:
             result = json.loads(response.read().decode('utf-8'))
             return result
     except urllib.error.HTTPError as e:
@@ -116,7 +116,7 @@ def set_featured_image(url, username, app_credential, post_id, media_id, rest_ba
     request.add_header('Content-Type', 'application/json')
 
     try:
-        with urllib.request.urlopen(request) as response:
+        with urlopen_authenticated(request) as response:
             result = json.loads(response.read().decode('utf-8'))
             return result
     except urllib.error.HTTPError as e:
@@ -144,7 +144,7 @@ def main():
     if not all([args.url, args.username, args.app_password]):
         print(json.dumps({"error": "Missing credentials"}), file=sys.stderr)
         sys.exit(1)
-    warn_insecure_wp_url(args.url)
+    require_secure_wp_url(args.url)
 
     if args.set_featured and not args.post_id:
         print(json.dumps({"error": "--post-id required when using --set-featured"}), file=sys.stderr)

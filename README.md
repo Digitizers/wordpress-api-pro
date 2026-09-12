@@ -63,7 +63,7 @@ ClawHub package directory: `wordpress-api-pro/`.
 
 ## Version
 
-Current version: **3.8.2**
+Current version: **3.9.0**
 
 ## Installation
 
@@ -105,7 +105,7 @@ touched):
 
 Or simply re-clone. WSL also works. macOS/Linux need nothing.
 
-Then restart Claude Code, export `WP_URL` / `WP_USERNAME` / `WP_APP_PASSWORD` (or set up `config/sites.json`), and ask Claude to use it. The ACF / SEO / JetEngine / plugin-detection scripts need `requests` (`pip install requests`); the core post/page/media/WooCommerce/batch scripts use the Python stdlib only.
+Then restart Claude Code, export `WP_URL` / `WP_USERNAME` / `WP_APP_PASSWORD` (or set up `config/sites.json`), and ask Claude to use it. The ACF / SEO / JetEngine / plugin-detection scripts need `requests` (`pip install -r wordpress-api-pro/requirements.txt`, which pins `requests>=2.32.3`); the core post/page/media/WooCommerce/batch scripts use the Python stdlib only.
 
 > Pairs well with the [Elementor MCP kit](https://github.com/Digitizers/siteagent-elementor-studio): build pages with the MCP, then handle media uploads, SEO meta, custom fields, and WooCommerce with these scripts.
 
@@ -344,7 +344,14 @@ python3 scripts/woo_products.py update --id 456 --description "Updated product d
 
 - ✅ Use Application Passwords, not regular account passwords.
 - ✅ Prefer a dedicated least-privilege WordPress API user.
-- ✅ Always use HTTPS for production sites.
+- ✅ Always use HTTPS for production sites — since 3.9.0 plaintext `http://` to a
+  non-local host is **refused**, not warned about (`WP_ALLOW_HTTP=1` opts out;
+  `localhost` and `.local` / `.test` / `.localhost` are exempt).
+- ✅ SEO meta writes are allowlisted to the Rank Math / Yoast keys since 3.9.0
+  (`WP_ALLOW_RAW_META=1` opts out). ACF / JetEngine keys are unaffected.
+- ✅ Every authenticated request drops its `Authorization` header if a redirect
+  leaves the origin, and the no-auth site audit refuses any address that is not
+  public — redirect targets included.
 - ✅ Store credentials in environment variables or local untracked config.
 - ✅ Keep `config/sites.json` local, untracked, and `chmod 600`.
 - ✅ Review dry-runs before live batch updates.
@@ -373,7 +380,7 @@ Trigger it manually from the Actions tab (workflow_dispatch) with **dry-run on**
 
 - Python 3.8+
 - WordPress 5.6+ recommended for built-in Application Passwords
-- `requests` for plugin integration scripts: `pip install requests`
+- `requests>=2.32.3` for plugin integration scripts: `pip install -r wordpress-api-pro/requirements.txt`
 
 ## Use Cases
 

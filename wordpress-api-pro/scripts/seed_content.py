@@ -11,7 +11,7 @@ Usage:
 Env: WP_URL/WP_SITE_URL, WP_USERNAME/WP_USER, WP_APP_PASSWORD
 """
 import argparse, json, os, sys
-from security import warn_insecure_wp_url
+from security import SafetyError, TEXT_MAX_BYTES, die_safety, validate_local_file, require_secure_wp_url
 
 # NB: the write-path modules (acf_fields/jetengine_fields) import `requests`, and
 # the image path needs upload_media. They are imported lazily inside seed() so the
@@ -115,7 +115,11 @@ def main():
     p.add_argument('--allow-remote-url', action='store_true', help='Permit remote image fetches')
     a = p.parse_args()
 
-    with open(a.dataset) as f:
+    try:
+        dataset_path = validate_local_file(a.dataset, purpose="dataset", max_bytes=TEXT_MAX_BYTES)
+    except SafetyError as e:
+        die_safety(e)
+    with open(dataset_path, encoding="utf-8") as f:
         dataset = json.load(f)
     if not isinstance(dataset, list):
         print(json.dumps({"error": "dataset must be a JSON array"}), file=sys.stderr); sys.exit(1)
@@ -126,7 +130,7 @@ def main():
 
     if not all([a.url, a.username, a.app_password]):
         print(json.dumps({"error": "Missing required credentials"}), file=sys.stderr); sys.exit(1)
-    warn_insecure_wp_url(a.url)
+    require_secure_wp_url(a.url)
     result = seed(a.url, a.username, a.app_password, dataset, allow_remote=a.allow_remote_url)
     print(json.dumps(result, indent=2))
     if result['failed']:

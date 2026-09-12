@@ -27,7 +27,7 @@ import os
 import sys
 import requests
 from base64 import b64encode
-from security import warn_insecure_wp_url
+from security import require_secure_wp_url
 
 def get_acf_fields(url, username, password, post_id, field_name=None):
     """Get ACF fields via REST API (with postmeta fallback)"""
@@ -149,7 +149,7 @@ def main():
         print(json.dumps({"error": "App password required (--app-password or WP_APP_PASSWORD env var)"}),
               file=sys.stderr)
         sys.exit(1)
-    warn_insecure_wp_url(args.url)
+    require_secure_wp_url(args.url)
 
     try:
         # Set operation

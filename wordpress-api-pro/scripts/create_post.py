@@ -2,7 +2,7 @@
 """Create a WordPress post or CPT entry via REST API (with taxonomy support)."""
 import argparse, json, os, sys, urllib.request, urllib.parse
 from base64 import b64encode
-from security import warn_insecure_wp_url, should_confirm_publish
+from security import require_secure_wp_url, should_confirm_publish, urlopen_authenticated
 
 
 def _auth(username, password):
@@ -12,7 +12,7 @@ def _auth(username, password):
 def _get(url, auth):
     req = urllib.request.Request(url, method='GET')
     req.add_header('Authorization', auth)
-    with urllib.request.urlopen(req) as r:
+    with urlopen_authenticated(req) as r:
         return json.loads(r.read().decode())
 
 
@@ -20,7 +20,7 @@ def _post(url, auth, payload):
     req = urllib.request.Request(url, data=json.dumps(payload).encode(), method='POST')
     req.add_header('Authorization', auth)
     req.add_header('Content-Type', 'application/json')
-    with urllib.request.urlopen(req) as r:
+    with urlopen_authenticated(req) as r:
         return json.loads(r.read().decode())
 
 
@@ -114,7 +114,7 @@ def main():
     if not all([a.url, a.username, a.app_password]):
         print(json.dumps({"error": "Missing required credentials"}), file=sys.stderr)
         sys.exit(1)
-    warn_insecure_wp_url(a.url)
+    require_secure_wp_url(a.url)
     if should_confirm_publish(a.status, a.yes, sys.stdin.isatty()):
         print("About to PUBLISH live content to %s. Type 'PUBLISH' to confirm:" % a.url, file=sys.stderr)
         print("> ", end="", file=sys.stderr)
