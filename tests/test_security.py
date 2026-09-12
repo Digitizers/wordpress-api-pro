@@ -250,7 +250,7 @@ class ProbeRedirectTest(unittest.TestCase):
     answer 302 http://169.254.169.254/, and urlopen would follow it."""
 
     def _redirect(self, to_url):
-        handler = security._PublicHostRedirectHandler()
+        handler = security._ValidatingRedirectHandler(security.validate_probe_url)
         req = urllib.request.Request("http://93.184.216.34/")
         return handler.redirect_request(req, None, 302, "Found", None, to_url)
 
@@ -337,8 +337,6 @@ class DatasetPathTest(unittest.TestCase):
                     os.environ["WP_ALLOWED_FILE_ROOTS"] = old
 
 
-if __name__ == "__main__":
-    unittest.main()
 
 
 class AuditUnreachableVsRefusedTest(unittest.TestCase):
@@ -511,3 +509,89 @@ class ErrorResultExitTest(unittest.TestCase):
             if "exit_on_error_result(" not in source:
                 offenders.append(name)
         self.assertEqual(offenders, [])
+
+
+class MediaRedirectTest(unittest.TestCase):
+    """fetch_https_media validated the URL the caller supplied and then let
+    urllib follow redirects unchecked, so a public HTTPS host could redirect to
+    http://127.0.0.1/ and the download would follow - the SSRF that validator
+    exists to prevent (ClawHub audit of 3.9.1: AIG and ClawScan both found it)."""
+
+    def _redirect(self, to_url):
+        handler = security._ValidatingRedirectHandler(security.validate_remote_url)
+        req = urllib.request.Request("https://93.184.216.34/logo.png")
+        return handler.redirect_request(req, None, 302, "Found", None, to_url)
+
+    def test_redirect_to_loopback_is_refused(self):
+        with self.assertRaises(SafetyError):
+            self._redirect("https://127.0.0.1/secret.png")
+
+    def test_redirect_to_link_local_metadata_is_refused(self):
+        with self.assertRaises(SafetyError):
+            self._redirect("https://169.254.169.254/latest/meta-data/")
+
+    def test_redirect_downgrading_to_http_is_refused(self):
+        """The media path is HTTPS-only, and a redirect must not launder that."""
+        with self.assertRaises(SafetyError):
+            self._redirect("http://93.184.216.34/logo.png")
+
+    def test_redirect_to_another_public_https_host_is_followed(self):
+        """A CDN handing off to another public host is ordinary and must work."""
+        self.assertEqual(self._redirect("https://8.8.8.8/logo.png").full_url,
+                         "https://8.8.8.8/logo.png")
+
+    def test_fetch_https_media_uses_the_validating_opener(self):
+        source = open(os.path.join(SCRIPTS, "security.py"), encoding="utf-8").read()
+        body = source[source.index("def fetch_https_media"):]
+        body = body[:body.index("return response, body")]
+        self.assertIn("_MEDIA_OPENER.open(", body)
+        self.assertNotIn("urllib.request.urlopen(", body)
+
+    def test_security_itself_keeps_no_bare_urlopen(self):
+        """The module that owns the redirect rules must not bypass them."""
+        source = open(os.path.join(SCRIPTS, "security.py"), encoding="utf-8").read()
+        code = [ln for ln in source.splitlines()
+                if "urllib.request.urlopen(" in ln and not ln.strip().startswith("#")]
+        self.assertEqual(code, [])
+
+
+class RequestTimeoutTest(unittest.TestCase):
+    """An unset timeout meant urllib's default: no timeout at all, so a hung or
+    black-holed connection stalled the agent for ever (ClawHub audit of 3.9.1,
+    [EA4] - availability hardening, not a vulnerability)."""
+
+    def _timeout_passed(self, fn, opener_name):
+        from unittest import mock as _mock
+        seen = {}
+
+        class FakeOpener:
+            def open(self, req, timeout=None):
+                seen["timeout"] = timeout
+                return "response"
+
+        with _mock.patch.object(security, opener_name, FakeOpener()):
+            fn()
+        return seen["timeout"]
+
+    def test_authenticated_calls_are_bounded_by_default(self):
+        req = urllib.request.Request("https://example.com/wp-json")
+        self.assertEqual(
+            self._timeout_passed(lambda: security.urlopen_authenticated(req), "_AUTH_SAFE_OPENER"),
+            security.DEFAULT_REQUEST_TIMEOUT)
+
+    def test_an_explicit_timeout_still_wins(self):
+        req = urllib.request.Request("https://example.com/wp-json")
+        self.assertEqual(
+            self._timeout_passed(lambda: security.urlopen_authenticated(req, timeout=7),
+                                 "_AUTH_SAFE_OPENER"),
+            7)
+
+    def test_probe_calls_are_bounded_by_default(self):
+        req = urllib.request.Request("https://8.8.8.8/")
+        self.assertEqual(
+            self._timeout_passed(lambda: security.urlopen_probe(req), "_PROBE_OPENER"),
+            security.DEFAULT_REQUEST_TIMEOUT)
+
+
+if __name__ == "__main__":
+    unittest.main()
