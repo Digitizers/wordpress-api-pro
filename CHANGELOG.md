@@ -21,8 +21,12 @@ Fixed:
   `site_audit http://192.168.1.1/` — or a public site answering `302
   http://169.254.169.254/` — reached whatever the agent's host can reach. It now
   opens through `security.urlopen_probe`, which validates the URL *and* the
-  target of every redirect against the public-address rule; the TLS expiry check
-  validates its hostname the same way. `http://` stays permitted here because
+  target of every redirect against the address rule; the TLS expiry check
+  validates its hostname the same way. An address must be globally reachable
+  (`is_global`) *and* none of private/loopback/link-local/multicast/reserved/
+  unspecified — enumerating only the second half missed RFC 6598 shared address
+  space (`100.64.0.0/10`), which Python reports as none of them and which is
+  routable on any network running CGNAT. `http://` stays permitted here because
   detecting a missing HTTPS redirect is one of the audit's own checks.
 - `seed_content` read its `--dataset` with a bare `open()`; it now goes through
   `validate_local_file` with the 2 MB text ceiling, like every other local read.

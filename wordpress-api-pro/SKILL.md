@@ -17,7 +17,7 @@ permissions:
   network:
     - "Outbound HTTPS to the configured WordPress site(s) /wp-json/ REST API — plaintext http:// to a non-local host is refused unless WP_ALLOW_HTTP=1"
     - "https://www.googleapis.com/pagespeedonline (site_audit only)"
-    - "site_audit reaches the audited site over http:// or https://; every address it connects to, redirects included, must be public (no loopback, private, link-local, multicast, reserved or unspecified)"
+    - "site_audit reaches the audited site over http:// or https://; every address it connects to, redirects included, must be globally reachable (is_global) and none of loopback, private, link-local, multicast, reserved or unspecified — CGNAT/shared address space (100.64.0.0/10) is refused too"
   filesystem:
     - "Read-only, scoped to WP_ALLOWED_FILE_ROOTS (default: cwd)"
   shell: "wp_cli.py spawns python3 <script> subprocesses (subprocess.run with an argv list; no shell interpreter, never shell=True). wp.sh is a bash wrapper around it."

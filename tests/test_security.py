@@ -362,3 +362,28 @@ class AuditUnreachableVsRefusedTest(unittest.TestCase):
         result = self._audit(SafetyError("Refusing host; resolved to unsafe address"))
         self.assertFalse(result["reachable"])
         self.assertEqual([f["check"] for f in result["findings"]], ["blocked"])
+
+
+class NonGlobalAddressTest(unittest.TestCase):
+    """Enumerating non-public categories misses whatever the enumeration forgot.
+    It forgot RFC 6598 shared address space: 100.64.0.1 is none of
+    private/loopback/link-local/multicast/reserved/unspecified to Python, and is
+    routable on every network that runs CGNAT (Codex, PR #17)."""
+
+    def test_cgnat_shared_address_space_is_refused(self):
+        with self.assertRaises(SafetyError):
+            validate_probe_url("http://100.64.0.1/")
+
+    def test_benchmarking_range_is_refused(self):
+        with self.assertRaises(SafetyError):
+            validate_probe_url("http://198.18.0.1/")
+
+    def test_nat64_prefix_is_refused_despite_being_global(self):
+        """64:ff9b::/96 reports is_global True, so the named flags stay as the
+        deny half rather than being replaced by the allowlist."""
+        with self.assertRaises(SafetyError):
+            validate_probe_url("http://[64:ff9b::1]/")
+
+    def test_an_ordinary_public_address_still_passes(self):
+        self.assertEqual(validate_probe_url("http://8.8.8.8/"), "http://8.8.8.8/")
+        self.assertEqual(validate_probe_host("93.184.216.34"), "93.184.216.34")

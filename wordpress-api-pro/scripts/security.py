@@ -123,7 +123,14 @@ def _assert_public_host(hostname: str) -> None:
         raise SafetyError(f"Host {hostname!r} resolved to no addresses")
 
     for address in addresses:
-        if any(
+        # is_global is the allowlist half and carries the rule: enumerating
+        # non-public categories misses whatever the enumeration forgot, and it
+        # forgot RFC 6598 shared address space (100.64.0.0/10) - a CGNAT
+        # address is none of private/loopback/link-local/multicast/reserved/
+        # unspecified to Python, and is routable on the networks that use it.
+        # The named flags stay as the deny half: 64:ff9b::/96 is is_global and
+        # still not somewhere this skill should be pointed.
+        if not address.is_global or any(
             [
                 address.is_private,
                 address.is_loopback,
