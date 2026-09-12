@@ -1,6 +1,6 @@
 ---
 name: wordpress-api-pro
-version: 3.9.4
+version: 3.9.5
 license: MIT-0
 description: |
   Production-grade WordPress REST API integration for managing posts, pages, media, WooCommerce products, Elementor content, SEO meta, ACF, and JetEngine fields.
@@ -13,10 +13,10 @@ permissions:
     - "WP_URL / WP_SITE_URL, WP_USERNAME / WP_USER, WP_APP_PASSWORD (auth)"
     - "WP_CONFIG (optional sites.json path), WP_ALLOWED_FILE_ROOTS (file-read scope)"
     - "WP_ALLOW_REMOTE_URLS, WP_REQUIRE_HTTPS, WP_REQUIRE_ALLOWLIST, PAGESPEED_API_KEY"
-    - "WP_ALLOW_HTTP, WP_ALLOW_RAW_META (escape hatches for the 3.9.0 defaults)"
+    - "WP_ALLOW_HTTP (comma-separated HOST LIST, never a blanket value), WP_ALLOW_RAW_META"
     - "WP_ALLOW_PROXY (use a configured HTTP(S) proxy for audit/media fetches; off by default because the proxy, not this skill, then decides what it connects to — with it on, URLs and redirect targets are still validated but addresses are not)"
   network:
-    - "Outbound HTTPS to the configured WordPress site(s) /wp-json/ REST API — plaintext http:// to a non-local host is refused unless WP_ALLOW_HTTP=1"
+    - "Outbound HTTPS to the configured WordPress site(s) /wp-json/ REST API — plaintext http:// to a non-local host is refused unless that exact host is named in WP_ALLOW_HTTP"
     - "https://www.googleapis.com/pagespeedonline (site_audit only)"
     - "site_audit reaches the audited site over http:// or https://; every address it connects to, redirects included, must be globally reachable (is_global) and none of loopback, private, link-local, multicast, reserved or unspecified — CGNAT/shared address space (100.64.0.0/10) is refused too. The validated address is the one dialled, so a name cannot resolve differently between the check and the connection; TLS is still verified against the hostname. HTTP(S)_PROXY is ignored for these fetches unless WP_ALLOW_PROXY=1, since a proxy resolves the target itself. Response bodies are capped at 5 MB"
   filesystem:
@@ -36,8 +36,9 @@ for the repo's `bash INSTALL.sh` — that installer lives in the git repo, not i
 the packaged skill):
 
 - **Auth:** export `WP_URL` / `WP_USERNAME` / `WP_APP_PASSWORD`, or use `config/sites.json` for multi-site.
-- **Dependencies:** the ACF / SEO / JetEngine / plugin-detection scripts need `requests` (`python3 -m pip install -r requirements.txt`, ideally in a venv). The pin is `requests>=2.32.3,<3`: 2.32.0 fixed CVE-2024-35195, where a `Session` that made one `verify=False` request silently skipped certificate verification for every later request to that host, and 2.32.3 closes out that line's follow-up regressions. The core post/page/media/WooCommerce/batch scripts use the stdlib only.
-- **Local dev sites** (e.g. `http://site.local`, `localhost`, `*.test`, `*.localhost`) work over plaintext http. Any other host must be https:// unless you set `WP_ALLOW_HTTP=1`, because Basic-Auth credentials would otherwise travel in the clear.
+- **Dependencies:** the ACF / SEO / JetEngine / plugin-detection scripts need `requests` (`python3 -m pip install -r requirements.txt`, ideally in a venv). The pin is a RANGE, `requests>=2.32.3,<3`, not an exact version or a hash lock. That is deliberate: an exact pin stops users receiving patch-level security fixes for the dependency whose advisory is the reason for the lower bound, and this skill has no lockfile-refresh process to compensate. The trade is reproducibility for patchability.
+   2.32.0 fixed CVE-2024-35195, where a `Session` that made one `verify=False` request silently skipped certificate verification for every later request to that host, and 2.32.3 closes out that line's follow-up regressions. The core post/page/media/WooCommerce/batch scripts use the stdlib only.
+- **Local dev sites** (e.g. `http://site.local`, `localhost`, `*.test`, `*.localhost`) work over plaintext http. Any other host must be https:// unless you name it: `WP_ALLOW_HTTP=staging.example.com` (comma-separated for several). A blanket `WP_ALLOW_HTTP=1` is refused — it used to permit every host, so one variable set for one staging box covered production too.
 - **Pairs with the Elementor MCP kit** (`siteagent-elementor-studio`): build page structure with the MCP, then do media uploads, SEO meta, custom fields, and WooCommerce here.
 
 ## Safety rules

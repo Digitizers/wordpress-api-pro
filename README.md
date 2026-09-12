@@ -63,7 +63,7 @@ ClawHub package directory: `wordpress-api-pro/`.
 
 ## Version
 
-Current version: **3.9.4**
+Current version: **3.9.5**
 
 ## Installation
 
@@ -345,7 +345,8 @@ python3 scripts/woo_products.py update --id 456 --description "Updated product d
 - ✅ Use Application Passwords, not regular account passwords.
 - ✅ Prefer a dedicated least-privilege WordPress API user.
 - ✅ Always use HTTPS for production sites — since 3.9.0 plaintext `http://` to a
-  non-local host is **refused**, not warned about (`WP_ALLOW_HTTP=1` opts out;
+  non-local host is **refused**, not warned about (`WP_ALLOW_HTTP=<host>` opts
+  out for that one host — a blanket `=1` is refused;
   `localhost` and `.local` / `.test` / `.localhost` are exempt).
 - ✅ SEO meta writes are allowlisted to the Rank Math / Yoast keys since 3.9.0
   (`WP_ALLOW_RAW_META=1` opts out). ACF / JetEngine keys are unaffected.

@@ -1,5 +1,29 @@
 # Changelog
 
+## 3.9.5 — 2026-09-13
+
+From the ClawHub audit of 3.9.4. AIG rated the first High.
+
+- **`WP_ALLOW_HTTP` is a host list, not a switch.** `WP_ALLOW_HTTP=1` meant "any
+  host", so one variable exported for one plaintext staging box silently covered
+  every site the agent touched afterwards - production included, with a reusable
+  application password on the wire. It now names the hosts it permits
+  (`WP_ALLOW_HTTP=staging.example.com`, comma-separated for several); a blanket
+  `1`/`true`/`yes`/`all`/`*` is refused and the error says what to write instead.
+  A refusal names the host you would have to allow, so the hint is actionable for
+  that site rather than for all of them. `WP_REQUIRE_HTTPS=1` still overrides the
+  list, and no longer suggests the hatch it overrides.
+- The localhost / `.local` / `.test` / `.localhost` exemption is unchanged.
+
+**BREAKING**: `WP_ALLOW_HTTP=1` stops working. Replace it with the hostname.
+
+Not changed: `requirements.txt` stays a range (`requests>=2.32.3,<3`) rather than
+an exact or hash pin, which the audit rates Low. An exact pin stops users
+receiving patch-level security fixes for the dependency whose advisory is the
+reason for the lower bound, and this skill has no lockfile-refresh process to
+compensate. The trade - reproducibility for patchability - is now stated in
+SKILL.md where the next auditor will meet it.
+
 ## 3.9.4 — 2026-09-13
 
 From the ClawHub audit of 3.9.3, which found one issue - both AIG and ClawScan

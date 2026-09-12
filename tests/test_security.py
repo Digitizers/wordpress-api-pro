@@ -28,11 +28,36 @@ class WpUrlSchemeTest(unittest.TestCase):
         with self.assertRaises(SafetyError):
             check_wp_url_scheme("http://example.com", env={})
 
-    def test_wp_allow_http_downgrades_the_refusal_to_a_warning(self):
+    def test_wp_allow_http_names_the_host_it_permits(self):
         result, err = self._stderr(check_wp_url_scheme, "http://example.com",
-                                   env={"WP_ALLOW_HTTP": "1"})
+                                   env={"WP_ALLOW_HTTP": "example.com"})
         self.assertIn("SECURITY WARNING", err)
         self.assertEqual(result, "http://example.com")  # url returned unchanged
+
+    def test_a_blanket_value_is_refused(self):
+        """WP_ALLOW_HTTP=1 used to mean "any host", so one variable set for one
+        staging box silently covered every site the agent touched afterwards -
+        production included (ClawHub audit of 3.9.4, AIG rated it High)."""
+        for blanket in ("1", "true", "yes", "all", "*"):
+            with self.assertRaises(SafetyError, msg=blanket) as caught:
+                check_wp_url_scheme("http://example.com", env={"WP_ALLOW_HTTP": blanket})
+            self.assertIn("name the host", str(caught.exception))
+
+    def test_a_named_host_does_not_cover_a_different_one(self):
+        with self.assertRaises(SafetyError):
+            check_wp_url_scheme("http://prod.example.com",
+                                env={"WP_ALLOW_HTTP": "staging.example.com"})
+
+    def test_several_hosts_can_be_listed(self):
+        _, err = self._stderr(check_wp_url_scheme, "http://b.example.com",
+                              env={"WP_ALLOW_HTTP": "a.example.com, b.example.com"})
+        self.assertIn("SECURITY WARNING", err)
+
+    def test_the_refusal_names_the_host_to_allow(self):
+        """The hint has to be actionable for THIS host, not a generic switch."""
+        with self.assertRaises(SafetyError) as caught:
+            check_wp_url_scheme("http://shop.example.com", env={})
+        self.assertIn("WP_ALLOW_HTTP=shop.example.com", str(caught.exception))
 
     def test_wp_require_https_still_refuses(self):
         """An environment that pinned WP_REQUIRE_HTTPS=1 keeps its behaviour."""
@@ -40,9 +65,12 @@ class WpUrlSchemeTest(unittest.TestCase):
             check_wp_url_scheme("http://example.com", env={"WP_REQUIRE_HTTPS": "1"})
 
     def test_explicit_strictness_beats_the_escape_hatch(self):
-        with self.assertRaises(SafetyError):
+        with self.assertRaises(SafetyError) as caught:
             check_wp_url_scheme("http://example.com",
-                                env={"WP_ALLOW_HTTP": "1", "WP_REQUIRE_HTTPS": "1"})
+                                env={"WP_ALLOW_HTTP": "example.com", "WP_REQUIRE_HTTPS": "1"})
+        # and it must not suggest the hatch, which would just fail again
+        self.assertIn("WP_REQUIRE_HTTPS=1", str(caught.exception))
+        self.assertNotIn("Set WP_ALLOW_HTTP", str(caught.exception))
 
     def test_https_is_silent(self):
         result, err = self._stderr(check_wp_url_scheme, "https://example.com", env={})
