@@ -26,7 +26,7 @@ from base64 import b64encode
 import importlib.util as _ilu, pathlib as _pl
 if not _ilu.find_spec("security"):
     sys.path.insert(0, str(_pl.Path(__file__).parent))
-from security import warn_insecure_wp_url, urlopen_authenticated
+from security import require_secure_wp_url, urlopen_authenticated
 
 def load_config(config_path=None):
     """Load sites configuration"""
@@ -51,7 +51,7 @@ def update_post(site, post_id, updates, dry_run=False):
         print(f"  [DRY RUN] Would update post {post_id}: {updates}")
         return True
 
-    warn_insecure_wp_url(site['url'])
+    require_secure_wp_url(site['url'])
     credentials = f"{site['username']}:{site['app_password']}".encode('utf-8')
     auth_header = b64encode(credentials).decode('ascii')
     

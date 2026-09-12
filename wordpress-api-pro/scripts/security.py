@@ -272,11 +272,21 @@ def urlopen_authenticated(req, timeout=None):
     return _AUTH_SAFE_OPENER.open(req, timeout=timeout)
 
 
-def warn_insecure_wp_url(url, env=None):
-    """Warn when a WordPress API URL is plaintext http:// on a non-local host.
-    Basic-Auth credentials would travel unencrypted. Localhost/dev hosts are exempt.
-    With WP_REQUIRE_HTTPS=1 this raises SafetyError instead of warning.
-    Returns the url unchanged (never mutates it)."""
+def check_wp_url_scheme(url, env=None):
+    """Refuse a WordPress API URL that is plaintext http:// on a non-local host.
+
+    Basic-Auth credentials would travel unencrypted, and an app password read
+    off the wire is the whole site. Localhost and .local/.test/.localhost dev
+    hosts are exempt and never warn.
+
+    Refusing is the default as of 3.9.0; before that this only printed a
+    warning. Set WP_ALLOW_HTTP=1 to go back to a warning - for a plaintext
+    staging host you accept the risk on. WP_REQUIRE_HTTPS=1 still refuses and
+    wins over WP_ALLOW_HTTP, so an environment that pinned it stays strict.
+
+    Returns the url unchanged (never mutates it); raises SafetyError to refuse.
+    """
+
     env = env if env is not None else os.environ
     parsed = urllib.parse.urlparse(url if "://" in str(url) else "https://" + str(url))
     host = (parsed.hostname or "").lower()
@@ -288,13 +298,27 @@ def warn_insecure_wp_url(url, env=None):
     )
     if parsed.scheme == "http" and not is_local:
         msg = (
-            "SECURITY WARNING: WordPress URL '%s' uses plaintext http:// — "
-            "Basic-Auth credentials will be sent unencrypted. Use https:// in production." % url
+            "WordPress URL '%s' uses plaintext http:// - "
+            "Basic-Auth credentials would be sent unencrypted. Use https:// in production." % url
         )
-        if env.get("WP_REQUIRE_HTTPS") == "1":
-            raise SafetyError(msg + " (WP_REQUIRE_HTTPS=1 set — refusing.)")
-        print(msg, file=sys.stderr)
+        allow_http = env.get("WP_ALLOW_HTTP") == "1" and env.get("WP_REQUIRE_HTTPS") != "1"
+        if not allow_http:
+            raise SafetyError(msg + " (Set WP_ALLOW_HTTP=1 to send them anyway.)")
+        print("SECURITY WARNING: " + msg + " (WP_ALLOW_HTTP=1 set - continuing.)", file=sys.stderr)
     return url
+
+
+def require_secure_wp_url(url, env=None):
+    """check_wp_url_scheme at the CLI boundary: exit 2 instead of raising.
+
+    Every script calls this one line before it authenticates, so a refusal has
+    to read as a safety error rather than as an uncaught traceback.
+    """
+
+    try:
+        return check_wp_url_scheme(url, env=env)
+    except SafetyError as error:
+        die_safety(error)
 
 
 def should_confirm_publish(status, assume_yes, is_tty):

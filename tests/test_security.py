@@ -6,67 +6,80 @@ sys.path.insert(0, os.path.abspath(SCRIPTS))
 
 import security  # noqa: E402
 from security import (  # noqa: E402
-    SafetyError, same_origin, should_confirm_publish, validate_probe_host,
-    validate_probe_url, validate_remote_url, warn_insecure_wp_url,
+    SafetyError, check_wp_url_scheme, require_secure_wp_url, same_origin,
+    should_confirm_publish, validate_probe_host,
+    validate_probe_url, validate_remote_url,
 )
 from seo_meta import _map_meta_keys  # noqa: E402
 
 
-class WarnInsecureWpUrlTest(unittest.TestCase):
-    def test_warns_on_http_nonlocal(self):
-        """http:// on a public host prints a SECURITY WARNING to stderr."""
+class WpUrlSchemeTest(unittest.TestCase):
+    """Plaintext http:// to a public host is refused as of 3.9.0; it used to
+    print a warning and continue, which sent the app password in the clear."""
+
+    def _stderr(self, fn, *args, **kwargs):
         import io, contextlib
         buf = io.StringIO()
         with contextlib.redirect_stderr(buf):
-            result = warn_insecure_wp_url("http://example.com", env={})
-        self.assertIn("SECURITY WARNING", buf.getvalue())
+            result = fn(*args, **kwargs)
+        return result, buf.getvalue()
+
+    def test_http_on_a_public_host_is_refused(self):
+        with self.assertRaises(SafetyError):
+            check_wp_url_scheme("http://example.com", env={})
+
+    def test_wp_allow_http_downgrades_the_refusal_to_a_warning(self):
+        result, err = self._stderr(check_wp_url_scheme, "http://example.com",
+                                   env={"WP_ALLOW_HTTP": "1"})
+        self.assertIn("SECURITY WARNING", err)
         self.assertEqual(result, "http://example.com")  # url returned unchanged
 
-    def test_silent_on_https(self):
-        """https:// never triggers a warning."""
-        import io, contextlib
-        buf = io.StringIO()
-        with contextlib.redirect_stderr(buf):
-            warn_insecure_wp_url("https://example.com", env={})
-        self.assertEqual(buf.getvalue(), "")
-
-    def test_silent_on_localhost_http(self):
-        """http:// on localhost/dev hosts is exempt — no warning."""
-        import io, contextlib
-        buf = io.StringIO()
-        with contextlib.redirect_stderr(buf):
-            warn_insecure_wp_url("http://localhost:8080", env={})
-            warn_insecure_wp_url("http://site.local", env={})
-        self.assertEqual(buf.getvalue(), "")
-
-    def test_raises_when_wp_require_https_set(self):
-        """WP_REQUIRE_HTTPS=1 upgrades the warning to a SafetyError."""
+    def test_wp_require_https_still_refuses(self):
+        """An environment that pinned WP_REQUIRE_HTTPS=1 keeps its behaviour."""
         with self.assertRaises(SafetyError):
-            warn_insecure_wp_url("http://example.com", env={"WP_REQUIRE_HTTPS": "1"})
+            check_wp_url_scheme("http://example.com", env={"WP_REQUIRE_HTTPS": "1"})
 
-    def test_silent_on_dot_test_host(self):
-        """http://*.test hosts are treated as local dev — no warning."""
+    def test_explicit_strictness_beats_the_escape_hatch(self):
+        with self.assertRaises(SafetyError):
+            check_wp_url_scheme("http://example.com",
+                                env={"WP_ALLOW_HTTP": "1", "WP_REQUIRE_HTTPS": "1"})
+
+    def test_https_is_silent(self):
+        result, err = self._stderr(check_wp_url_scheme, "https://example.com", env={})
+        self.assertEqual(err, "")
+        self.assertEqual(result, "https://example.com")
+
+    def test_local_dev_hosts_stay_exempt(self):
+        """localhost and the .local/.test/.localhost suffixes never warn or refuse -
+        a local site has no wire for a credential to leak on."""
+        for url in ("http://localhost:8080", "http://site.local",
+                    "http://mysite.test", "http://app.localhost"):
+            result, err = self._stderr(check_wp_url_scheme, url, env={})
+            self.assertEqual(err, "", url)
+            self.assertEqual(result, url)
+
+    def test_local_is_exempt_even_under_wp_require_https(self):
+        _, err = self._stderr(check_wp_url_scheme, "http://localhost",
+                              env={"WP_REQUIRE_HTTPS": "1"})
+        self.assertEqual(err, "")
+
+
+class RequireSecureWpUrlTest(unittest.TestCase):
+    """The CLI boundary: a refusal must read as a safety error with exit 2,
+    not as an uncaught traceback."""
+
+    def test_refusal_exits_two(self):
         import io, contextlib
         buf = io.StringIO()
         with contextlib.redirect_stderr(buf):
-            warn_insecure_wp_url("http://mysite.test", env={})
-        self.assertEqual(buf.getvalue(), "")
+            with self.assertRaises(SystemExit) as caught:
+                require_secure_wp_url("http://example.com", env={})
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn("Safety error", buf.getvalue())
 
-    def test_silent_on_dot_localhost_host(self):
-        """http://*.localhost hosts are treated as local dev — no warning."""
-        import io, contextlib
-        buf = io.StringIO()
-        with contextlib.redirect_stderr(buf):
-            warn_insecure_wp_url("http://app.localhost", env={})
-        self.assertEqual(buf.getvalue(), "")
-
-    def test_wp_require_https_not_triggered_for_local(self):
-        """WP_REQUIRE_HTTPS=1 does NOT raise for localhost — local is always exempt."""
-        import io, contextlib
-        buf = io.StringIO()
-        with contextlib.redirect_stderr(buf):
-            warn_insecure_wp_url("http://localhost", env={"WP_REQUIRE_HTTPS": "1"})
-        self.assertEqual(buf.getvalue(), "")
+    def test_https_passes_through(self):
+        self.assertEqual(require_secure_wp_url("https://example.com", env={}),
+                         "https://example.com")
 
 
 class ShouldConfirmPublishTest(unittest.TestCase):
@@ -273,3 +286,34 @@ class NoBareAuthenticatedUrlopenTest(unittest.TestCase):
             if "urllib.request.urlopen(" in source:
                 offenders.append(name)
         self.assertEqual(offenders, [])
+
+
+class DatasetPathTest(unittest.TestCase):
+    """seed_content read its --dataset with a bare open(), so it would read any
+    path the agent could name. It goes through validate_local_file now."""
+
+    def test_seed_content_validates_its_dataset_path(self):
+        source = open(os.path.join(SCRIPTS, "seed_content.py"), encoding="utf-8").read()
+        self.assertIn("validate_local_file(a.dataset", source)
+        self.assertNotIn("open(a.dataset)", source)
+
+    def test_validate_local_file_refuses_a_path_outside_the_allowed_roots(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as inside, tempfile.TemporaryDirectory() as outside:
+            good = os.path.join(inside, "data.json")
+            bad = os.path.join(outside, "data.json")
+            for path in (good, bad):
+                open(path, "w", encoding="utf-8").write("[]")
+            env_root = inside
+            old = os.environ.get("WP_ALLOWED_FILE_ROOTS")
+            os.environ["WP_ALLOWED_FILE_ROOTS"] = env_root
+            try:
+                self.assertEqual(str(security.validate_local_file(good)),
+                                 str(os.path.realpath(good)))
+                with self.assertRaises(SafetyError):
+                    security.validate_local_file(bad)
+            finally:
+                if old is None:
+                    os.environ.pop("WP_ALLOWED_FILE_ROOTS")
+                else:
+                    os.environ["WP_ALLOWED_FILE_ROOTS"] = old

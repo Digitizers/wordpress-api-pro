@@ -26,7 +26,7 @@ import os
 import sys
 import subprocess
 from pathlib import Path
-from security import warn_insecure_wp_url
+from security import require_secure_wp_url
 
 def load_config(config_path=None):
     """Load sites configuration (optional fallback)"""
@@ -117,7 +117,7 @@ def run_command(site_config, command, args):
         print("Error: Missing credentials. Set WP_URL, WP_USERNAME, WP_APP_PASSWORD or use config file", file=sys.stderr)
         sys.exit(1)
 
-    warn_insecure_wp_url(env['WP_URL'])
+    require_secure_wp_url(env['WP_URL'])
 
     # Run with modified environment
     result = subprocess.run(cmd, env=env)

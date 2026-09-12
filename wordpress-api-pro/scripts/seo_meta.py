@@ -27,7 +27,7 @@ import json
 import os
 import sys
 from base64 import b64encode
-from security import warn_insecure_wp_url
+from security import require_secure_wp_url
 
 # Meta key mappings
 RANKMATH_KEYS = {
@@ -230,7 +230,7 @@ def main():
         print(json.dumps({"error": "App password required (--app-password or WP_APP_PASSWORD env var)"}),
               file=sys.stderr)
         sys.exit(1)
-    warn_insecure_wp_url(args.url)
+    require_secure_wp_url(args.url)
 
     try:
         # Detect only
