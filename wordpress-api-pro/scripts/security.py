@@ -338,6 +338,34 @@ def require_secure_wp_url(url, env=None):
         die_safety(error)
 
 
+def check_wp_url_schemes(targets, env=None):
+    """Check a whole batch of targets up front. Returns a list of (label, message).
+
+    `targets` is an iterable of (label, url) pairs. A multi-site run must know
+    about every insecure URL BEFORE it writes to the first site: refusing in the
+    middle of the loop leaves the earlier sites modified, the later ones
+    untouched and no summary printed.
+    """
+
+    problems = []
+    for label, url in targets:
+        try:
+            check_wp_url_scheme(url, env=env)
+        except SafetyError as error:
+            problems.append((label, str(error)))
+    return problems
+
+
+def require_secure_wp_urls(targets, env=None):
+    """check_wp_url_schemes at the CLI boundary: exit 2 naming every offender."""
+
+    problems = check_wp_url_schemes(targets, env=env)
+    if problems:
+        for label, message in problems:
+            print(f"Safety error: {label}: {message}", file=sys.stderr)
+        sys.exit(2)
+
+
 def should_confirm_publish(status, assume_yes, is_tty):
     """True only when we should interactively prompt before a live publish:
     going to 'publish', not pre-approved with --yes, and attached to a TTY.

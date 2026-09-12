@@ -30,6 +30,12 @@ Fixed:
   detecting a missing HTTPS redirect is one of the audit's own checks.
 - `seed_content` read its `--dataset` with a bare `open()`; it now goes through
   `validate_local_file` with the 2 MB text ceiling, like every other local read.
+- The multi-site runners check **every** selected site before the first write.
+  Refusing http:// inside the loop would abort a batch partway - earlier sites
+  modified, later ones untouched, no summary - so `batch_update` and `wp_cli`
+  preflight the whole selection. A dry run reports the same problems without
+  exiting, so planning surfaces them (it makes no requests, so there is nothing
+  to refuse).
 - `describe_cpt` sent Basic credentials without ever checking the URL scheme —
   its `main()` was the one authenticated CLI that never called the guard, so the
   plaintext-http rule below did not apply to it.

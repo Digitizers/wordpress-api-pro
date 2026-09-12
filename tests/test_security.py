@@ -387,3 +387,44 @@ class NonGlobalAddressTest(unittest.TestCase):
     def test_an_ordinary_public_address_still_passes(self):
         self.assertEqual(validate_probe_url("http://8.8.8.8/"), "http://8.8.8.8/")
         self.assertEqual(validate_probe_host("93.184.216.34"), "93.184.216.34")
+
+
+class BatchPreflightTest(unittest.TestCase):
+    """Turning the http warning into a refusal made it abort mid-loop: a batch
+    with an https site followed by an http one modified the first site, exited
+    on the second, and printed no summary (Codex, PR #17)."""
+
+    TARGETS = [("good", "https://a.example.com"), ("bad", "http://b.example.com"),
+               ("also-bad", "http://c.example.com"), ("local", "http://site.test")]
+
+    def test_every_offender_is_reported_not_just_the_first(self):
+        problems = security.check_wp_url_schemes(self.TARGETS, env={})
+        self.assertEqual([label for label, _ in problems], ["bad", "also-bad"])
+
+    def test_a_clean_batch_has_no_problems(self):
+        self.assertEqual(
+            security.check_wp_url_schemes([("a", "https://a.example.com"),
+                                           ("b", "http://localhost:8080")], env={}),
+            [])
+
+    def test_require_exits_two_and_names_each_site(self):
+        import io, contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            with self.assertRaises(SystemExit) as caught:
+                security.require_secure_wp_urls(self.TARGETS, env={})
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn("bad:", buf.getvalue())
+        self.assertIn("also-bad:", buf.getvalue())
+
+    def test_batch_update_preflights_before_the_write_loop(self):
+        source = open(os.path.join(SCRIPTS, "batch_update.py"), encoding="utf-8").read()
+        preflight = source.index("require_secure_wp_urls(selected)")
+        loop = source.index("for site_name in site_names:")
+        self.assertLess(preflight, loop)
+
+    def test_wp_cli_preflights_the_whole_group(self):
+        source = open(os.path.join(SCRIPTS, "wp_cli.py"), encoding="utf-8").read()
+        preflight = source.index("require_secure_wp_urls(")
+        loop = source.index("for site_name in site_data:")
+        self.assertLess(preflight, loop)
