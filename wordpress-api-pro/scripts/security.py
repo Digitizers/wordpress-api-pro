@@ -294,17 +294,35 @@ def _address_enforcing_opener(validator, env=None):
 
     env = env if env is not None else os.environ
     handlers = [_PinnedHTTPHandler(), _PinnedHTTPSHandler(), _ValidatingRedirectHandler(validator)]
-    if env.get("WP_ALLOW_PROXY") == "1":
-        if any(env.get(name) for name in PROXY_ENV_VARS):
-            print(
-                "SECURITY WARNING: WP_ALLOW_PROXY=1 and a proxy is configured - "
-                "the proxy resolves and connects to the target, so this skill's "
-                "address rules are not enforced end to end.",
-                file=sys.stderr,
-            )
-    else:
+    if env.get("WP_ALLOW_PROXY") != "1":
         handlers.insert(0, urllib.request.ProxyHandler({}))
     return urllib.request.build_opener(*handlers)
+
+
+_proxy_warning_emitted = False
+
+
+def _warn_proxy_in_use(env=None) -> None:
+    """Warn once, when a fetch that claims address enforcement actually runs.
+
+    Warning at import time instead would fire twice (one opener each) in every
+    CLI that imports this module - including create_post and the rest, which
+    never touch these openers and whose address rules are unaffected.
+    """
+
+    global _proxy_warning_emitted
+    env = env if env is not None else os.environ
+    if _proxy_warning_emitted or env.get("WP_ALLOW_PROXY") != "1":
+        return
+    if not any(env.get(name) for name in PROXY_ENV_VARS):
+        return
+    _proxy_warning_emitted = True
+    print(
+        "SECURITY WARNING: WP_ALLOW_PROXY=1 and a proxy is configured - "
+        "the proxy resolves and connects to the target, so this skill's "
+        "address rules are not enforced end to end.",
+        file=sys.stderr,
+    )
 
 
 _PROBE_OPENER = _address_enforcing_opener(validate_probe_url)
@@ -337,6 +355,7 @@ def urlopen_probe(req, timeout=None):
 
     url = req.full_url if isinstance(req, urllib.request.Request) else req
     validate_probe_url(url)
+    _warn_proxy_in_use()
     return _PROBE_OPENER.open(
         req, timeout=DEFAULT_REQUEST_TIMEOUT if timeout is None else timeout)
 
@@ -361,6 +380,7 @@ def fetch_https_media(url: str, *, timeout: int = 20, max_bytes: int = DEFAULT_M
     """Fetch a validated HTTPS URL and return (response, body)."""
 
     validate_remote_url(url)
+    _warn_proxy_in_use()
     request = urllib.request.Request(url, headers={"User-Agent": "wordpress-api-pro/3.4.0"})
     # Through the media opener, so a redirect is held to the same rule as the
     # URL the caller supplied: HTTPS only, and a globally reachable address.

@@ -718,24 +718,23 @@ class ProxyBypassTest(unittest.TestCase):
         self.assertEqual(proxy_hits, [])
         self.assertEqual(len(target_hits), 1)
 
-    def test_wp_allow_proxy_restores_it_and_warns(self):
+    def test_wp_allow_proxy_restores_it(self):
         """urllib reads the proxy from the real environment (getproxies), so the
         opt-in has to be exercised against os.environ, not just the env mapping
-        this function is handed."""
-        import io, contextlib
+        this function is handed - and no_proxy has to be cleared, or a host that
+        exempts 127.0.0.1 (common in dev and CI) would bypass the local proxy and
+        make this pass for the wrong reason."""
         from unittest import mock as _mock
         pport, proxy_hits = self._server("proxy", b"from-proxy")
         tport, _ = self._server("target", b"from-target")
-        env = {"HTTP_PROXY": f"http://127.0.0.1:{pport}", "WP_ALLOW_PROXY": "1"}
-        buf = io.StringIO()
+        env = {"HTTP_PROXY": f"http://127.0.0.1:{pport}", "WP_ALLOW_PROXY": "1",
+               "no_proxy": "", "NO_PROXY": ""}
         with _mock.patch.dict(os.environ, env, clear=False):
             with _mock.patch.object(security, "_assert_public_host", return_value=["127.0.0.1"]):
-                with contextlib.redirect_stderr(buf):
-                    opener = security._address_enforcing_opener(security.validate_probe_url, env=env)
+                opener = security._address_enforcing_opener(security.validate_probe_url, env=env)
                 body = opener.open(f"http://127.0.0.1:{tport}/x", timeout=5).read()
         self.assertEqual(body, b"from-proxy")
         self.assertEqual(len(proxy_hits), 1)
-        self.assertIn("not enforced end to end", buf.getvalue())
 
     def test_the_default_opener_registers_no_proxy_handler(self):
         """Passing an empty ProxyHandler is what stops build_opener installing the
@@ -751,9 +750,52 @@ class ProxyBypassTest(unittest.TestCase):
         import io, contextlib
         buf = io.StringIO()
         with contextlib.redirect_stderr(buf):
-            security._address_enforcing_opener(security.validate_probe_url,
-                                               env={"WP_ALLOW_PROXY": "1"})
+            security._warn_proxy_in_use(env={"WP_ALLOW_PROXY": "1"})
         self.assertEqual(buf.getvalue(), "")
+
+
+class ProxyWarningTest(unittest.TestCase):
+    """The warning belongs to a fetch that claims address enforcement, not to
+    importing the module: at import it fired twice (one opener each) in every
+    CLI that imports security, including the ones that never use these openers
+    (Codex, PR #20)."""
+
+    def setUp(self):
+        security._proxy_warning_emitted = False
+        self.addCleanup(setattr, security, "_proxy_warning_emitted", False)
+
+    def _stderr_of(self, fn):
+        import io, contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            fn()
+        return buf.getvalue()
+
+    def test_building_an_opener_is_silent(self):
+        env = {"WP_ALLOW_PROXY": "1", "HTTP_PROXY": "http://proxy.internal:3128"}
+        out = self._stderr_of(
+            lambda: security._address_enforcing_opener(security.validate_probe_url, env=env))
+        self.assertEqual(out, "")
+
+    def test_the_warning_fires_once_for_a_protected_fetch(self):
+        env = {"WP_ALLOW_PROXY": "1", "HTTP_PROXY": "http://proxy.internal:3128"}
+        first = self._stderr_of(lambda: security._warn_proxy_in_use(env=env))
+        second = self._stderr_of(lambda: security._warn_proxy_in_use(env=env))
+        self.assertIn("not enforced end to end", first)
+        self.assertEqual(second, "")
+
+    def test_silent_without_the_opt_in(self):
+        self.assertEqual(
+            self._stderr_of(lambda: security._warn_proxy_in_use(
+                env={"HTTP_PROXY": "http://proxy.internal:3128"})),
+            "")
+
+    def test_the_fetch_paths_call_it(self):
+        source = open(os.path.join(SCRIPTS, "security.py"), encoding="utf-8").read()
+        for fn in ("def urlopen_probe", "def fetch_https_media"):
+            body = source[source.index(fn):]
+            body = body[:body.index("\n\n\n")]
+            self.assertIn("_warn_proxy_in_use()", body, fn)
 
 
 if __name__ == "__main__":
