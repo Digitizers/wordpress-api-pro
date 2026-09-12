@@ -593,5 +593,243 @@ class RequestTimeoutTest(unittest.TestCase):
             security.DEFAULT_REQUEST_TIMEOUT)
 
 
+class DnsPinningTest(unittest.TestCase):
+    """The validator resolved the name and urlopen resolved it again, so an
+    attacker controlling the name could answer a public address for the check
+    and a private one for the connection (ClawHub audit of 3.9.2: AIG and
+    ClawScan). Everything that enforces the rule now DIALS a validated address."""
+
+    def _serve(self):
+        import threading
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+
+        class H(BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b"payload")
+            def log_message(self, *a):
+                pass
+
+        srv = HTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.shutdown)
+        return f"http://127.0.0.1:{srv.server_address[1]}/", srv.server_address[1]
+
+    def test_a_loopback_target_is_refused_at_connect_time(self):
+        url, _ = self._serve()
+        with self.assertRaises(SafetyError):
+            security._PROBE_OPENER.open(url, timeout=5)
+
+    def test_the_pinned_opener_still_transports_a_request(self):
+        """The refusal above must come from the rule, not from a broken opener."""
+        from unittest import mock as _mock
+        url, _ = self._serve()
+        with _mock.patch.object(security, "_assert_public_host", return_value=["127.0.0.1"]):
+            response = security._PROBE_OPENER.open(url, timeout=5)
+        self.assertEqual(response.status, 200)
+        self.assertEqual(response.read(), b"payload")
+
+    def test_the_connection_dials_the_validated_address(self):
+        from unittest import mock as _mock
+        _, port = self._serve()
+        with _mock.patch.object(security, "_assert_public_host", return_value=["127.0.0.1"]):
+            sock = security._connect_to_public_host("any.example", port, 5)
+        self.addCleanup(sock.close)
+        self.assertEqual(sock.getpeername()[0], "127.0.0.1")
+
+    def test_a_refused_address_is_never_dialled(self):
+        with self.assertRaises(SafetyError):
+            security._connect_to_public_host("127.0.0.1", 9, 5)
+
+    def test_validation_returns_the_addresses_it_approved(self):
+        """Returning them is what lets the caller pin one instead of re-resolving."""
+        self.assertEqual(security._public_addresses("8.8.8.8"), ["8.8.8.8"])
+
+    def test_the_audit_no_longer_opens_its_own_socket(self):
+        source = open(os.path.join(SCRIPTS, "site_audit.py"), encoding="utf-8").read()
+        self.assertNotIn("socket.create_connection", source)
+        self.assertIn("connect_public_tls(", source)
+
+    def test_tls_verification_still_uses_the_hostname(self):
+        """Pinning the address must not weaken certificate checking."""
+        source = open(os.path.join(SCRIPTS, "security.py"), encoding="utf-8").read()
+        body = source[source.index("class _PinnedHTTPSConnection"):]
+        body = body[:body.index("class _PinnedHTTPHandler")]
+        self.assertIn("server_hostname=self._tunnel_host or self.host", body)
+
+
+class AuditBodyLimitTest(unittest.TestCase):
+    """site_audit read response bodies with a bare read(), so any server it
+    visited decided how much memory this process used."""
+
+    def test_both_read_paths_are_bounded(self):
+        source = open(os.path.join(SCRIPTS, "site_audit.py"), encoding="utf-8").read()
+        self.assertNotIn("r.read().decode", source)
+        self.assertNotIn("e.read().decode", source)
+        self.assertIn("r.read(MAX_BODY_BYTES)", source)
+        self.assertIn("e.read(MAX_BODY_BYTES)", source)
+
+    def test_the_cap_is_applied_to_a_real_oversized_body(self):
+        import io, site_audit as sa
+        class Huge(io.RawIOBase):
+            def read(self, n=-1):
+                return b"x" * (n if n and n > 0 else 1024)
+        capped = Huge().read(sa.MAX_BODY_BYTES)
+        self.assertEqual(len(capped), sa.MAX_BODY_BYTES)
+
+
+class ProxyBypassTest(unittest.TestCase):
+    """urllib's default ProxyHandler rewrites the connection host to the proxy
+    before the pinned handlers run, so the pin validated and dialled the PROXY
+    while the real target travelled on in the absolute request URI - and the
+    proxy resolved that target itself, with none of these rules applied. The
+    pin was enforcing the address of the wrong host (Codex, PR #20)."""
+
+    def _server(self, tag, body):
+        import threading
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+
+        hits = []
+
+        class H(BaseHTTPRequestHandler):
+            def do_GET(self):
+                hits.append(self.path)
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(body)
+            def log_message(self, *a):
+                pass
+
+        srv = HTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.shutdown)
+        return srv.server_address[1], hits
+
+    def test_a_configured_proxy_is_ignored_by_default(self):
+        from unittest import mock as _mock
+        pport, proxy_hits = self._server("proxy", b"from-proxy")
+        tport, target_hits = self._server("target", b"from-target")
+        env = {"HTTP_PROXY": f"http://127.0.0.1:{pport}"}
+        with _mock.patch.object(security, "_assert_public_host", return_value=["127.0.0.1"]):
+            opener = security._address_enforcing_opener(security.validate_probe_url, env=env)
+            body = opener.open(f"http://127.0.0.1:{tport}/x", timeout=5).read()
+        self.assertEqual(body, b"from-target")
+        self.assertEqual(proxy_hits, [])
+        self.assertEqual(len(target_hits), 1)
+
+    def test_wp_allow_proxy_restores_it(self):
+        """urllib reads the proxy from the real environment (getproxies), so the
+        opt-in has to be exercised against os.environ, not just the env mapping
+        this function is handed - and no_proxy has to be cleared, or a host that
+        exempts 127.0.0.1 (common in dev and CI) would bypass the local proxy and
+        make this pass for the wrong reason."""
+        from unittest import mock as _mock
+        pport, proxy_hits = self._server("proxy", b"from-proxy")
+        tport, _ = self._server("target", b"from-target")
+        # Clear EVERY proxy variable before setting ours: urllib prefers the
+        # lowercase http_proxy over the uppercase one, and no_proxy exempting
+        # 127.0.0.1 would bypass the local proxy - either would make this test
+        # pass for the wrong reason on a developer's machine or in CI.
+        env = {name: "" for name in security.PROXY_ENV_VARS}
+        env.update({"no_proxy": "", "NO_PROXY": "", "WP_ALLOW_PROXY": "1",
+                    "http_proxy": f"http://127.0.0.1:{pport}",
+                    "HTTP_PROXY": f"http://127.0.0.1:{pport}"})
+        with _mock.patch.dict(os.environ, env, clear=False):
+            with _mock.patch.object(security, "_assert_public_host", return_value=["127.0.0.1"]):
+                opener = security._address_enforcing_opener(security.validate_probe_url, env=env)
+                body = opener.open(f"http://127.0.0.1:{tport}/x", timeout=5).read()
+        self.assertEqual(body, b"from-proxy")
+        self.assertEqual(len(proxy_hits), 1)
+
+    def test_the_opt_in_does_not_pin_the_proxy_itself(self):
+        """An enterprise proxy is normally on a private address - the exact kind
+        the pinned classes reject - so leaving them in place made the documented
+        escape hatch fail for the only case it exists for (Codex, PR #20)."""
+        names = [type(h).__name__ for h in
+                 security._address_enforcing_opener(
+                     security.validate_probe_url, env={"WP_ALLOW_PROXY": "1"}).handlers]
+        self.assertNotIn("_PinnedHTTPConnection", names)
+        self.assertNotIn("_PinnedHTTPHandler", names)
+        self.assertNotIn("_PinnedHTTPSHandler", names)
+        self.assertIn("_ValidatingRedirectHandler", names)
+
+    def test_a_private_proxy_is_reachable_under_the_opt_in(self):
+        """127.0.0.1 stands in for the private address a real proxy sits on."""
+        from unittest import mock as _mock
+        pport, proxy_hits = self._server("proxy", b"from-proxy")
+        tport, _ = self._server("target", b"from-target")
+        env = {name: "" for name in security.PROXY_ENV_VARS}
+        env.update({"no_proxy": "", "NO_PROXY": "", "WP_ALLOW_PROXY": "1",
+                    "http_proxy": f"http://127.0.0.1:{pport}",
+                    "HTTP_PROXY": f"http://127.0.0.1:{pport}"})
+        with _mock.patch.dict(os.environ, env, clear=False):
+            opener = security._address_enforcing_opener(security.validate_probe_url, env=env)
+            body = opener.open(f"http://93.184.216.34/x", timeout=5).read()
+        self.assertEqual(body, b"from-proxy")
+        self.assertEqual(len(proxy_hits), 1)
+
+    def test_the_default_opener_registers_no_proxy_handler(self):
+        """Passing an empty ProxyHandler is what stops build_opener installing the
+        default one; an empty handler registers no proxy_open methods, so the
+        absence of any ProxyHandler here IS the mechanism."""
+        names = [type(h).__name__ for h in
+                 security._address_enforcing_opener(security.validate_probe_url, env={}).handlers]
+        self.assertNotIn("ProxyHandler", names)
+        self.assertIn("_PinnedHTTPHandler", names)
+        self.assertIn("_PinnedHTTPSHandler", names)
+
+    def test_no_warning_when_allowed_but_no_proxy_is_configured(self):
+        import io, contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            security._warn_proxy_in_use(env={"WP_ALLOW_PROXY": "1"})
+        self.assertEqual(buf.getvalue(), "")
+
+
+class ProxyWarningTest(unittest.TestCase):
+    """The warning belongs to a fetch that claims address enforcement, not to
+    importing the module: at import it fired twice (one opener each) in every
+    CLI that imports security, including the ones that never use these openers
+    (Codex, PR #20)."""
+
+    def setUp(self):
+        security._proxy_warning_emitted = False
+        self.addCleanup(setattr, security, "_proxy_warning_emitted", False)
+
+    def _stderr_of(self, fn):
+        import io, contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            fn()
+        return buf.getvalue()
+
+    def test_building_an_opener_is_silent(self):
+        env = {"WP_ALLOW_PROXY": "1", "HTTP_PROXY": "http://proxy.internal:3128"}
+        out = self._stderr_of(
+            lambda: security._address_enforcing_opener(security.validate_probe_url, env=env))
+        self.assertEqual(out, "")
+
+    def test_the_warning_fires_once_for_a_protected_fetch(self):
+        env = {"WP_ALLOW_PROXY": "1", "HTTP_PROXY": "http://proxy.internal:3128"}
+        first = self._stderr_of(lambda: security._warn_proxy_in_use(env=env))
+        second = self._stderr_of(lambda: security._warn_proxy_in_use(env=env))
+        self.assertIn("not enforced end to end", first)
+        self.assertEqual(second, "")
+
+    def test_silent_without_the_opt_in(self):
+        self.assertEqual(
+            self._stderr_of(lambda: security._warn_proxy_in_use(
+                env={"HTTP_PROXY": "http://proxy.internal:3128"})),
+            "")
+
+    def test_the_fetch_paths_call_it(self):
+        source = open(os.path.join(SCRIPTS, "security.py"), encoding="utf-8").read()
+        for fn in ("def urlopen_probe", "def fetch_https_media"):
+            body = source[source.index(fn):]
+            body = body[:body.index("\n\n\n")]
+            self.assertIn("_warn_proxy_in_use()", body, fn)
+
+
 if __name__ == "__main__":
     unittest.main()

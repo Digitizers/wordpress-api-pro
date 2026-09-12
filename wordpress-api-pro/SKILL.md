@@ -1,6 +1,6 @@
 ---
 name: wordpress-api-pro
-version: 3.9.2
+version: 3.9.3
 license: MIT-0
 description: |
   Production-grade WordPress REST API integration for managing posts, pages, media, WooCommerce products, Elementor content, SEO meta, ACF, and JetEngine fields.
@@ -14,10 +14,11 @@ permissions:
     - "WP_CONFIG (optional sites.json path), WP_ALLOWED_FILE_ROOTS (file-read scope)"
     - "WP_ALLOW_REMOTE_URLS, WP_REQUIRE_HTTPS, WP_REQUIRE_ALLOWLIST, PAGESPEED_API_KEY"
     - "WP_ALLOW_HTTP, WP_ALLOW_RAW_META (escape hatches for the 3.9.0 defaults)"
+    - "WP_ALLOW_PROXY (use a configured HTTP(S) proxy for audit/media fetches; off by default because the proxy, not this skill, then decides what it connects to — with it on, URLs and redirect targets are still validated but addresses are not)"
   network:
     - "Outbound HTTPS to the configured WordPress site(s) /wp-json/ REST API — plaintext http:// to a non-local host is refused unless WP_ALLOW_HTTP=1"
     - "https://www.googleapis.com/pagespeedonline (site_audit only)"
-    - "site_audit reaches the audited site over http:// or https://; every address it connects to, redirects included, must be globally reachable (is_global) and none of loopback, private, link-local, multicast, reserved or unspecified — CGNAT/shared address space (100.64.0.0/10) is refused too"
+    - "site_audit reaches the audited site over http:// or https://; every address it connects to, redirects included, must be globally reachable (is_global) and none of loopback, private, link-local, multicast, reserved or unspecified — CGNAT/shared address space (100.64.0.0/10) is refused too. The validated address is the one dialled, so a name cannot resolve differently between the check and the connection; TLS is still verified against the hostname. HTTP(S)_PROXY is ignored for these fetches unless WP_ALLOW_PROXY=1, since a proxy resolves the target itself. Response bodies are capped at 5 MB"
   filesystem:
     - "Read-only, scoped to WP_ALLOWED_FILE_ROOTS (default: cwd)"
   shell: "wp_cli.py spawns python3 <script> subprocesses (subprocess.run with an argv list; no shell interpreter, never shell=True). wp.sh is a bash wrapper around it."

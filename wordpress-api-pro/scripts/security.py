@@ -7,9 +7,11 @@ portable inside OpenClaw agent environments.
 
 from __future__ import annotations
 
+import http.client
 import ipaddress
 import os
 import socket
+import ssl
 import sys
 import urllib.parse
 import urllib.request
@@ -108,14 +110,16 @@ def validate_remote_url(url: str) -> str:
     return url
 
 
-def _assert_public_host(hostname: str) -> None:
+def _assert_public_host(hostname: str) -> list[str]:
     """Raise SafetyError unless every address the hostname resolves to is public.
 
     Shared by validate_remote_url (media downloads, HTTPS only) and
     validate_probe_url (the site audit, which must also reach http://).
-    Note: this resolves the name, and urlopen resolves it again, so a
-    DNS-rebinding attacker retains a narrow window. It still closes the
-    plain "audit http://192.168.1.1/" case, which is the realistic one.
+    Returns the validated addresses so a caller can CONNECT to one of them
+    rather than resolving the name a second time. Resolving twice is a
+    time-of-check/time-of-use gap: an attacker controlling the name can answer
+    a public address for the check and a private one microseconds later, when
+    urlopen resolves it again. The pinned handlers below close that window.
     """
 
     try:
@@ -145,6 +149,7 @@ def _assert_public_host(hostname: str) -> None:
             ]
         ):
             raise SafetyError(f"Refusing host {hostname!r}; resolved to unsafe address {address}")
+    return [str(address) for address in addresses]
 
 
 def validate_probe_url(url: str) -> str:
@@ -201,8 +206,154 @@ class _ValidatingRedirectHandler(urllib.request.HTTPRedirectHandler):
         return new
 
 
-_PROBE_OPENER = urllib.request.build_opener(_ValidatingRedirectHandler(validate_probe_url))
-_MEDIA_OPENER = urllib.request.build_opener(_ValidatingRedirectHandler(validate_remote_url))
+def _public_addresses(hostname: str) -> list[str]:
+    """Validated addresses for a hostname, in order, without duplicates."""
+
+    seen: set[str] = set()
+    unique: list[str] = []
+    for address in _assert_public_host(hostname):
+        if address not in seen:
+            seen.add(address)
+            unique.append(address)
+    return unique
+
+
+def _connect_to_public_host(host, port, timeout, source_address=None):
+    """Open a socket to an address this module just validated.
+
+    Everything that enforces the address rule connects through here, so the
+    address that was checked is the address that is used. Resolving the name
+    again at connect time is the DNS-rebinding hole: the check and the use
+    would be two different lookups, and an attacker who controls the name
+    decides what the second one returns.
+    """
+
+    last_error = None
+    for address in _public_addresses(host):
+        try:
+            return socket.create_connection((address, port), timeout, source_address)
+        except OSError as exc:      # try the next address, as getaddrinfo order intends
+            last_error = exc
+    raise last_error if last_error else SafetyError(f"Host {host!r} resolved to no usable address")
+
+
+class _PinnedHTTPConnection(http.client.HTTPConnection):
+    """HTTPConnection that dials a validated address instead of re-resolving."""
+
+    def connect(self):
+        self.sock = _connect_to_public_host(self.host, self.port, self.timeout, self.source_address)
+        if self._tunnel_host:
+            self._tunnel()
+
+
+class _PinnedHTTPSConnection(http.client.HTTPSConnection):
+    """As above, with TLS still verified against the NAME, not the address.
+
+    The certificate and SNI use self.host, so pinning the address changes only
+    which endpoint is dialled - it never weakens certificate validation.
+    """
+
+    def connect(self):
+        sock = _connect_to_public_host(self.host, self.port, self.timeout, self.source_address)
+        if self._tunnel_host:
+            self.sock = sock
+            self._tunnel()
+            sock = self.sock
+        self.sock = self._context.wrap_socket(sock, server_hostname=self._tunnel_host or self.host)
+
+
+class _PinnedHTTPHandler(urllib.request.HTTPHandler):
+    def http_open(self, req):
+        return self.do_open(_PinnedHTTPConnection, req)
+
+
+class _PinnedHTTPSHandler(urllib.request.HTTPSHandler):
+    def https_open(self, req):
+        return self.do_open(_PinnedHTTPSConnection, req, context=self._context)
+
+
+PROXY_ENV_VARS = ("http_proxy", "https_proxy", "all_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY")
+
+
+def _address_enforcing_opener(validator, env=None):
+    """An opener that holds every hop AND every connection to `validator`.
+
+    Proxies are disabled here, and that is load-bearing rather than tidiness.
+    urllib's default ProxyHandler rewrites the connection host to the proxy
+    before these handlers run, so the pinned connection would validate and dial
+    the PROXY while the real target travelled on in the absolute request URI
+    (http) or in CONNECT (https) - and the proxy would resolve that target
+    itself, with none of these rules applied. The pin would be enforcing the
+    address of the wrong host. A private enterprise proxy would also be refused
+    outright as an unsafe address, which is a confusing way to fail.
+
+    WP_ALLOW_PROXY=1 restores proxy use for an environment where the proxy is
+    the only egress, at the cost of end-to-end address enforcement: from there
+    the proxy decides what it connects to. That mode also drops the pinned
+    connection classes, because they would refuse the proxy itself - an
+    enterprise proxy is normally on a private address, which is exactly the
+    kind of address they exist to reject. Pinning a connection whose host has
+    been rewritten to the proxy enforces nothing anyway: it would check the
+    address of the proxy while the real target rides along in the request.
+    URL-level validation stays in both modes, for the initial URL and every
+    redirect target.
+    """
+
+    env = env if env is not None else os.environ
+    if env.get("WP_ALLOW_PROXY") == "1":
+        return urllib.request.build_opener(_ValidatingRedirectHandler(validator))
+    return urllib.request.build_opener(
+        urllib.request.ProxyHandler({}),
+        _PinnedHTTPHandler(),
+        _PinnedHTTPSHandler(),
+        _ValidatingRedirectHandler(validator),
+    )
+
+
+_proxy_warning_emitted = False
+
+
+def _warn_proxy_in_use(env=None) -> None:
+    """Warn once, when a fetch that claims address enforcement actually runs.
+
+    Warning at import time instead would fire twice (one opener each) in every
+    CLI that imports this module - including create_post and the rest, which
+    never touch these openers and whose address rules are unaffected.
+    """
+
+    global _proxy_warning_emitted
+    env = env if env is not None else os.environ
+    if _proxy_warning_emitted or env.get("WP_ALLOW_PROXY") != "1":
+        return
+    if not any(env.get(name) for name in PROXY_ENV_VARS):
+        return
+    _proxy_warning_emitted = True
+    print(
+        "SECURITY WARNING: WP_ALLOW_PROXY=1 and a proxy is configured - "
+        "the proxy resolves and connects to the target, so this skill's "
+        "address rules are not enforced end to end.",
+        file=sys.stderr,
+    )
+
+
+_PROBE_OPENER = _address_enforcing_opener(validate_probe_url)
+_MEDIA_OPENER = _address_enforcing_opener(validate_remote_url)
+
+
+def connect_public_tls(host, port=443, timeout=10):
+    """TLS-connect to a validated address for `host`, for certificate inspection.
+
+    The site audit's expiry check opens its own socket rather than fetching a
+    URL, so it needs the same pinning the openers above apply.
+    """
+
+    context = ssl.create_default_context()
+    sock = _connect_to_public_host(host, port, timeout)
+    try:
+        return context.wrap_socket(sock, server_hostname=host)
+    except Exception:
+        sock.close()
+        raise
 
 
 def urlopen_probe(req, timeout=None):
@@ -215,6 +366,7 @@ def urlopen_probe(req, timeout=None):
 
     url = req.full_url if isinstance(req, urllib.request.Request) else req
     validate_probe_url(url)
+    _warn_proxy_in_use()
     return _PROBE_OPENER.open(
         req, timeout=DEFAULT_REQUEST_TIMEOUT if timeout is None else timeout)
 
@@ -239,6 +391,7 @@ def fetch_https_media(url: str, *, timeout: int = 20, max_bytes: int = DEFAULT_M
     """Fetch a validated HTTPS URL and return (response, body)."""
 
     validate_remote_url(url)
+    _warn_proxy_in_use()
     request = urllib.request.Request(url, headers={"User-Agent": "wordpress-api-pro/3.4.0"})
     # Through the media opener, so a redirect is held to the same rule as the
     # URL the caller supplied: HTTPS only, and a globally reachable address.
