@@ -134,7 +134,12 @@ def _map_meta_keys(meta_dict, plugin, env=None):
 
     Returns (payload_dict, raw_warnings) where payload_dict is ready to POST
     and raw_warnings is a list of (key, message) tuples for non-allowlisted keys.
-    With WP_REQUIRE_ALLOWLIST=1, raises ValueError for the first raw key found.
+
+    A key outside the plugin's allowlist is refused as of 3.9.0 (ValueError);
+    before that it was written as raw postmeta with a warning, which let a
+    typo'd friendly name silently create a junk meta row - or overwrite a key
+    another plugin owns. Set WP_ALLOW_RAW_META=1 to write raw keys with a
+    warning. WP_REQUIRE_ALLOWLIST=1 still refuses and wins over it.
     """
     if env is None:
         env = os.environ
@@ -153,15 +158,20 @@ def _map_meta_keys(meta_dict, plugin, env=None):
                     raise ValueError("Invalid JSON for schema field")
             payload[meta_key] = value
         else:
-            # Raw (non-allowlisted) meta key. Allowed by default for flexibility,
-            # but surfaced so it's never silent. WP_REQUIRE_ALLOWLIST=1 refuses.
+            # Raw (non-allowlisted) meta key. Refused by default; WP_ALLOW_RAW_META=1
+            # writes it with a warning, and WP_REQUIRE_ALLOWLIST=1 overrides that.
             msg = (
-                "SEO meta: '%s' is not in the %s allowlist — writing it as a raw "
-                "postmeta key." % (friendly_name, plugin)
+                "SEO meta: '%s' is not in the %s allowlist" % (friendly_name, plugin)
             )
-            if env.get("WP_REQUIRE_ALLOWLIST") == "1":
-                raise ValueError(msg + " (WP_REQUIRE_ALLOWLIST=1 set — refusing.)")
-            raw_warnings.append((friendly_name, msg))
+            allow_raw = (
+                env.get("WP_ALLOW_RAW_META") == "1"
+                and env.get("WP_REQUIRE_ALLOWLIST") != "1"
+            )
+            if not allow_raw:
+                raise ValueError(
+                    msg + ". Set WP_ALLOW_RAW_META=1 to write it as a raw postmeta key."
+                )
+            raw_warnings.append((friendly_name, msg + " - writing it as a raw postmeta key."))
             payload[friendly_name] = value
     return payload, raw_warnings
 
@@ -197,6 +207,14 @@ def set_seo_meta(url, username, password, post_id, meta_dict, plugin='rankmath')
             return {"error": f"HTTP {response.status_code}", "details": error_data}
     except requests.exceptions.RequestException as e:
         return {"error": str(e)}
+
+def _exit_on_error(result):
+    """These helpers report failure as {"error": ...} rather than by raising, so
+    without this a refused write printed its error and still exited 0 - which
+    CI and an agent both read as success."""
+    if isinstance(result, dict) and result.get("error"):
+        sys.exit(1)
+
 
 def main():
     parser = argparse.ArgumentParser(description='Read/write SEO meta (Rank Math + Yoast)')
@@ -249,11 +267,13 @@ def main():
             result = set_seo_meta(args.url, args.username, args.app_password, 
                                  args.post_id, meta, plugin)
             print(json.dumps(result, indent=2))
+            _exit_on_error(result)
         # Get operation
         else:
             result = get_seo_meta(args.url, args.username, args.app_password, 
                                  args.post_id, plugin)
             print(json.dumps(result, indent=2))
+            _exit_on_error(result)
             
     except json.JSONDecodeError as e:
         print(json.dumps({"error": f"Invalid JSON: {e}"}), file=sys.stderr)

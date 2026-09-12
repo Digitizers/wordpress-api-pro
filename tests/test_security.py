@@ -110,29 +110,31 @@ class SeoMetaRawKeyTest(unittest.TestCase):
         self.assertEqual(payload, {"rank_math_title": "My Title"})
         self.assertEqual(warnings, [])
 
-    def test_raw_key_included_in_payload_and_warns(self):
-        """Non-allowlisted key is still written but produces a warning entry."""
-        payload, warnings = _map_meta_keys({"_custom_raw_key": "val"}, "rankmath", env={})
-        self.assertIn("_custom_raw_key", payload)
+    def test_raw_key_is_refused_by_default(self):
+        """A key outside the allowlist used to be written as raw postmeta with a
+        warning, so a typo'd friendly name silently created a junk meta row."""
+        with self.assertRaises(ValueError) as ctx:
+            _map_meta_keys({"_custom_raw_key": "val"}, "rankmath", env={})
+        self.assertIn("_custom_raw_key", str(ctx.exception))
+        self.assertIn("WP_ALLOW_RAW_META=1", str(ctx.exception))
+
+    def test_wp_allow_raw_meta_restores_the_write_with_a_warning(self):
+        payload, warnings = _map_meta_keys({"_custom_raw_key": "val"}, "rankmath",
+                                           env={"WP_ALLOW_RAW_META": "1"})
         self.assertEqual(payload["_custom_raw_key"], "val")
         self.assertEqual(len(warnings), 1)
         _key, msg = warnings[0]
         self.assertIn("_custom_raw_key", msg)
         self.assertIn("not in the rankmath allowlist", msg)
 
-    def test_raw_key_warn_message_printed_to_stderr(self):
-        """_map_meta_keys itself returns warnings; set_seo_meta prints them."""
-        import io, contextlib
-        # Exercise the stderr print path via set_seo_meta with a mocked HTTP layer.
-        # Here we test _map_meta_keys returns the right warning text.
-        _payload, warnings = _map_meta_keys({"_raw": "x"}, "yoast", env={})
-        self.assertTrue(any("not in the yoast allowlist" in msg for _k, msg in warnings))
-
-    def test_require_allowlist_env_refuses_raw_key(self):
-        """WP_REQUIRE_ALLOWLIST=1 turns the warning into a ValueError (refusal)."""
-        with self.assertRaises(ValueError) as ctx:
+    def test_require_allowlist_env_still_refuses_raw_key(self):
+        with self.assertRaises(ValueError):
             _map_meta_keys({"_raw_key": "val"}, "rankmath", env={"WP_REQUIRE_ALLOWLIST": "1"})
-        self.assertIn("WP_REQUIRE_ALLOWLIST=1", str(ctx.exception))
+
+    def test_explicit_strictness_beats_the_escape_hatch(self):
+        with self.assertRaises(ValueError):
+            _map_meta_keys({"_raw_key": "val"}, "yoast",
+                           env={"WP_ALLOW_RAW_META": "1", "WP_REQUIRE_ALLOWLIST": "1"})
 
     def test_require_allowlist_allows_known_keys(self):
         """WP_REQUIRE_ALLOWLIST=1 does NOT block properly allowlisted keys."""
@@ -141,10 +143,6 @@ class SeoMetaRawKeyTest(unittest.TestCase):
         )
         self.assertEqual(payload, {"_yoast_wpseo_metadesc": "desc"})
         self.assertEqual(warnings, [])
-
-
-if __name__ == "__main__":
-    unittest.main()
 
 
 class SameOriginTest(unittest.TestCase):
@@ -317,3 +315,7 @@ class DatasetPathTest(unittest.TestCase):
                     os.environ.pop("WP_ALLOWED_FILE_ROOTS")
                 else:
                     os.environ["WP_ALLOWED_FILE_ROOTS"] = old
+
+
+if __name__ == "__main__":
+    unittest.main()
