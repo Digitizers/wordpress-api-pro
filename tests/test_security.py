@@ -64,6 +64,16 @@ class WpUrlSchemeTest(unittest.TestCase):
         with self.assertRaises(SafetyError):
             check_wp_url_scheme("http://example.com", env={"WP_REQUIRE_HTTPS": "1"})
 
+    def test_strictness_wins_over_a_legacy_blanket_value_too(self):
+        """An upgraded environment may still carry WP_ALLOW_HTTP=1 alongside
+        WP_REQUIRE_HTTPS=1. Telling that operator to write a hostname instead
+        proposes a change that cannot work (Codex, PR #23)."""
+        with self.assertRaises(SafetyError) as caught:
+            check_wp_url_scheme("http://example.com",
+                                env={"WP_ALLOW_HTTP": "1", "WP_REQUIRE_HTTPS": "1"})
+        self.assertIn("WP_REQUIRE_HTTPS=1", str(caught.exception))
+        self.assertNotIn("name the host", str(caught.exception))
+
     def test_explicit_strictness_beats_the_escape_hatch(self):
         with self.assertRaises(SafetyError) as caught:
             check_wp_url_scheme("http://example.com",

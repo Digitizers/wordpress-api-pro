@@ -489,6 +489,11 @@ def check_wp_url_scheme(url, env=None):
             "WordPress URL '%s' uses plaintext http:// - "
             "Basic-Auth credentials would be sent unencrypted. Use https:// in production." % url
         )
+        # Strictness is checked FIRST: when WP_REQUIRE_HTTPS=1 is also set, every
+        # other message here would propose a change that cannot work, because it
+        # overrides the allowlist either way.
+        if env.get("WP_REQUIRE_HTTPS") == "1":
+            raise SafetyError(msg + " (WP_REQUIRE_HTTPS=1 is set - refusing.)")
         raw = env.get("WP_ALLOW_HTTP") or ""
         allowed = {item.strip().lower() for item in raw.split(",") if item.strip()}
         if allowed & {"1", "true", "yes", "all", "*"}:
@@ -496,10 +501,6 @@ def check_wp_url_scheme(url, env=None):
                 msg + " WP_ALLOW_HTTP no longer takes a blanket value: name the host(s) "
                 "instead, e.g. WP_ALLOW_HTTP=%s" % (host or "staging.example.com")
             )
-        if env.get("WP_REQUIRE_HTTPS") == "1":
-            # Don't suggest the hatch here: WP_REQUIRE_HTTPS overrides it, so
-            # following that advice would just fail again.
-            raise SafetyError(msg + " (WP_REQUIRE_HTTPS=1 is set - refusing.)")
         if host not in allowed:
             hint = (" (Set WP_ALLOW_HTTP=%s to send them to THIS host anyway.)" % host) if host else ""
             raise SafetyError(msg + hint)
