@@ -464,10 +464,13 @@ def check_wp_url_scheme(url, env=None):
     off the wire is the whole site. Localhost and .local/.test/.localhost dev
     hosts are exempt and never warn.
 
-    Refusing is the default as of 3.9.0; before that this only printed a
-    warning. Set WP_ALLOW_HTTP=1 to go back to a warning - for a plaintext
-    staging host you accept the risk on. WP_REQUIRE_HTTPS=1 still refuses and
-    wins over WP_ALLOW_HTTP, so an environment that pinned it stays strict.
+    Refusing is the default as of 3.9.0. The escape hatch is a HOST LIST, not a
+    switch: WP_ALLOW_HTTP=staging.example.com (comma-separated for several)
+    permits plaintext for exactly those hosts. WP_ALLOW_HTTP=1 is refused as of
+    3.9.5 - it used to mean "any host", so one variable set for one staging box
+    silently covered every site the agent touched afterwards, including
+    production. WP_REQUIRE_HTTPS=1 still refuses everything and wins over the
+    list.
 
     Returns the url unchanged (never mutates it); raises SafetyError to refuse.
     """
@@ -486,10 +489,23 @@ def check_wp_url_scheme(url, env=None):
             "WordPress URL '%s' uses plaintext http:// - "
             "Basic-Auth credentials would be sent unencrypted. Use https:// in production." % url
         )
-        allow_http = env.get("WP_ALLOW_HTTP") == "1" and env.get("WP_REQUIRE_HTTPS") != "1"
-        if not allow_http:
-            raise SafetyError(msg + " (Set WP_ALLOW_HTTP=1 to send them anyway.)")
-        print("SECURITY WARNING: " + msg + " (WP_ALLOW_HTTP=1 set - continuing.)", file=sys.stderr)
+        # Strictness is checked FIRST: when WP_REQUIRE_HTTPS=1 is also set, every
+        # other message here would propose a change that cannot work, because it
+        # overrides the allowlist either way.
+        if env.get("WP_REQUIRE_HTTPS") == "1":
+            raise SafetyError(msg + " (WP_REQUIRE_HTTPS=1 is set - refusing.)")
+        raw = env.get("WP_ALLOW_HTTP") or ""
+        allowed = {item.strip().lower() for item in raw.split(",") if item.strip()}
+        if allowed & {"1", "true", "yes", "all", "*"}:
+            raise SafetyError(
+                msg + " WP_ALLOW_HTTP no longer takes a blanket value: name the host(s) "
+                "instead, e.g. WP_ALLOW_HTTP=%s" % (host or "staging.example.com")
+            )
+        if host not in allowed:
+            hint = (" (Set WP_ALLOW_HTTP=%s to send them to THIS host anyway.)" % host) if host else ""
+            raise SafetyError(msg + hint)
+        print("SECURITY WARNING: " + msg
+              + " (WP_ALLOW_HTTP names %s - continuing.)" % host, file=sys.stderr)
     return url
 
 
