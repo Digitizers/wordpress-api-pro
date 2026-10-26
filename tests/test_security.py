@@ -689,6 +689,23 @@ class DnsPinningTest(unittest.TestCase):
         self.assertNotIn("socket.create_connection", source)
         self.assertIn("connect_public_tls(", source)
 
+    def test_the_certificate_check_refuses_tls_below_1_2(self):
+        """CodeQL py/insecure-protocol: a bare default context lets Python
+        builds that still allow TLS 1.0/1.1 negotiate them."""
+        import ssl
+        from unittest import mock as _mock
+        seen = {}
+
+        def capture(ctx, sock, server_hostname=None):
+            seen["min"] = ctx.minimum_version
+            return sock
+
+        fake = _mock.Mock()
+        with _mock.patch.object(security, "_connect_to_public_host", return_value=fake), \
+                _mock.patch.object(ssl.SSLContext, "wrap_socket", autospec=True, side_effect=capture):
+            security.connect_public_tls("any.example")
+        self.assertGreaterEqual(seen["min"], ssl.TLSVersion.TLSv1_2)
+
     def test_tls_verification_still_uses_the_hostname(self):
         """Pinning the address must not weaken certificate checking."""
         source = open(os.path.join(SCRIPTS, "security.py"), encoding="utf-8").read()
