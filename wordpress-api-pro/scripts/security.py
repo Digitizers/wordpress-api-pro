@@ -348,6 +348,7 @@ def connect_public_tls(host, port=443, timeout=10):
     """
 
     context = ssl.create_default_context()
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
     sock = _connect_to_public_host(host, port, timeout)
     try:
         return context.wrap_socket(sock, server_hostname=host)
